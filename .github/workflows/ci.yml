@@ -54,7 +54,7 @@ jobs:
           curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz | tar xz kubeconform
           for o in local ci; do kubectl kustomize k8s/overlays/$o | ./kubeconform -strict -summary -; done
       - name: Misconfiguration scan (k8s + Dockerfiles)
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: config
           scan-ref: .
@@ -87,7 +87,7 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
       - name: Vulnerability scan (blocks on fixable HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@0.33.1
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ivy/${{ matrix.service }}:ci
           trivy-config: trivy.yaml
