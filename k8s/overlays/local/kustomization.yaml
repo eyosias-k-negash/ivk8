@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Local k3d cluster (make up). Images are built locally and imported with k3d image import.
+resources:
+  - ../../base
+images:
+  - { name: ivy/analytics-service, newTag: local }
+  - { name: ivy/drive-sync-service, newTag: local }
+  - { name: ivy/web-dashboard, newTag: local }
+patches:
+  - target: { kind: Ingress, name: ivy }
+    patch: |-
+      - op: add
+        path: /spec/ingressClassName
+        value: traefik
+  # Images are imported into the cluster, never pulled.
+  - target: { kind: Deployment }
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never

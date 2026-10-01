@@ -1,0 +1,21 @@
+# deps / build
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# secrets & local data (never commit)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+backups/
+*.backup.json
+
+# editor / OS
+.directory
+.DS_Store
+.idea/
+.vscode/

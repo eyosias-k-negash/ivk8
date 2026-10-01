@@ -1,0 +1,16 @@
+# analytics-service: reachable ONLY from drive-sync-service; may call out only on 443 (ECB rates).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: analytics-service
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: analytics-service } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app.kubernetes.io/name: drive-sync-service } }
+      ports: [{ protocol: TCP, port: 8081 }]
+  egress:
+    - to:
+        - ipBlock: { cidr: 0.0.0.0/0, except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16] }
+      ports: [{ protocol: TCP, port: 443 }]

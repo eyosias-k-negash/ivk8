@@ -1,0 +1,15 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ivy
+spec:
+  rules:
+    - http:
+        paths:
+          # Only drive-sync is public API; analytics-service is never exposed.
+          - path: /api
+            pathType: Prefix
+            backend: { service: { name: drive-sync-service, port: { name: http } } }
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: web-dashboard, port: { name: http } } }

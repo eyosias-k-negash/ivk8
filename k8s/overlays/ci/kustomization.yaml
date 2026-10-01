@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Ephemeral k3d cluster in GitHub Actions (smoke test). Images come from the same CI run.
+resources:
+  - ../../base
+images:
+  - { name: ivy/analytics-service, newTag: ci }
+  - { name: ivy/drive-sync-service, newTag: ci }
+  - { name: ivy/web-dashboard, newTag: ci }
+patches:
+  - target: { kind: Ingress, name: ivy }
+    patch: |-
+      - op: add
+        path: /spec/ingressClassName
+        value: traefik
+  # Images are imported into the cluster, never pulled.
+  - target: { kind: Deployment }
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
+  # One replica each is enough for a smoke test.
+  - target: { kind: Deployment }
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1

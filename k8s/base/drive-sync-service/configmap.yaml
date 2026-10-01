@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: drive-sync-config
+data:
+  PORT: "8080"
+  ANALYTICS_URL: http://analytics-service:8081
+  MAX_BACKUP_BYTES: "52428800"
+  PUBLIC_BASE_URL: http://localhost:8080

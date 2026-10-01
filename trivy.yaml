@@ -1,0 +1,7 @@
+# Shared Trivy settings for CI and `make scan`.
+severity: [HIGH, CRITICAL]
+exit-code: 1
+scan:
+  skip-dirs: [node_modules, "**/node_modules", "**/dist"]
+vulnerability:
+  ignore-unfixed: true

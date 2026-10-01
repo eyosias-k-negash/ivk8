@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ivy
+labels:
+  - pairs: { app.kubernetes.io/part-of: ivy-wallet-plus }
+    includeTemplates: true
+resources:
+  - namespace.yaml
+  - analytics-service/deployment.yaml
+  - analytics-service/service.yaml
+  - drive-sync-service/configmap.yaml
+  - drive-sync-service/deployment.yaml
+  - drive-sync-service/service.yaml
+  - web-dashboard/deployment.yaml
+  - web-dashboard/service.yaml
+  - ingress.yaml
+  - network-policies/default-deny.yaml
+  - network-policies/ingress-controller.yaml
+  - network-policies/analytics.yaml
+  - network-policies/drive-sync.yaml

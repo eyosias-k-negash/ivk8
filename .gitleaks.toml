@@ -1,0 +1,12 @@
+title = "ivy-wallet-plus"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Templates and test fixtures only"
+paths = [
+  '''\.env\.example$''',
+  '''package-lock\.json$''',
+  '''services/.*/tests/.*''',
+]

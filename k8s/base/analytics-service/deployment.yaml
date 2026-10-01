@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-service
+spec:
+  # In-memory dataset cache: one replica keeps it warm. More replicas still work
+  # (drive-sync re-ingests on a cache miss), just with extra uploads.
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: analytics-service }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: analytics-service }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: app
+          image: ivy/analytics-service
+          ports: [{ name: http, containerPort: 8081 }]
+          env:
+            - { name: PORT, value: "8081" }
+            - { name: MAX_BACKUP_BYTES, value: "52428800" }
+            - { name: DATASET_CACHE_SIZE, value: "8" }
+            # Optional: EUR-quoted JSON provider for currencies the ECB lacks (e.g. ETB).
+            - { name: FALLBACK_RATES_URL, value: "" }
+          readinessProbe: { httpGet: { path: /readyz, port: http }, periodSeconds: 10 }
+          livenessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 20 }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 768Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: {} }]

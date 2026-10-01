@@ -1,0 +1,57 @@
+name: release
+
+# After CI passes on main: publish signed images with SBOM + provenance to GHCR.
+# Promotion to a long-lived cluster is intentionally not wired yet (see docs/adr/0004).
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # keyless cosign signing
+    strategy:
+      matrix:
+        service: [analytics-service, drive-sync-service, web-dashboard]
+    steps:
+      - uses: actions/checkout@v5
+        with: { ref: "${{ github.event.workflow_run.head_sha }}" }
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/ivy-${{ matrix.service }}
+          tags: |
+            type=sha,format=long,prefix=
+            type=raw,value=main
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/${{ matrix.service }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          sbom: true
+          provenance: mode=max
+          cache-from: type=gha,scope=${{ matrix.service }}
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign image (keyless, by digest)
+        env:
+          IMAGE: ghcr.io/${{ github.repository_owner }}/ivy-${{ matrix.service }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "${IMAGE,,}@${DIGEST}"

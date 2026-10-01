@@ -1,0 +1,14 @@
+# The ingress controller (Traefik in kube-system on k3s) may reach the two public services.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-ingress-controller
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app.kubernetes.io/name, operator: In, values: [web-dashboard, drive-sync-service] }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+      ports: [{ protocol: TCP, port: 8080 }]

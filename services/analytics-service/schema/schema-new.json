@@ -1,0 +1,240 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "IvyWalletCompleteData",
+  "description": "Root container schema for Ivy Wallet backup JSON.",
+  "type": "object",
+  "properties": {
+    "accounts": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/AccountEntity" }
+    },
+    "budgets": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/BudgetEntity" }
+    },
+    "categories": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/CategoryEntity" }
+    },
+    "loanRecords": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/LoanRecordEntity" }
+    },
+    "loans": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/LoanEntity" }
+    },
+    "plannedPaymentRules": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/PlannedPaymentRuleEntity" }
+    },
+    "settings": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/SettingsEntity" }
+    },
+    "transactions": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/TransactionEntity" }
+    },
+    "sharedPrefs": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/TagEntity" }
+    },
+    "tagAssociations": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/TagAssociationEntity" }
+    }
+  },
+  "required": [
+    "accounts",
+    "budgets",
+    "categories",
+    "loanRecords",
+    "loans",
+    "plannedPaymentRules",
+    "settings",
+    "transactions",
+    "sharedPrefs"
+  ],
+  "definitions": {
+    "AccountEntity": {
+      "type": "object",
+      "description": "Represents a financial account/wallet.",
+      "properties": {
+        "id": { "type": "string", "format": "uuid", "description": "Unique UUID identifier for the account (Primary Key)." },
+        "name": { "type": "string", "description": "Display name of the account." },
+        "currency": { "type": ["string", "null"], "description": "ISO currency code (e.g., USD, EUR)." },
+        "color": { "type": "integer", "description": "Color integer for UI representation." },
+        "icon": { "type": ["string", "null"], "description": "Icon identifier string." },
+        "orderNum": { "type": "number", "description": "Sorting order index. Optional (defaults to 0.0 if omitted)." },
+        "includeInBalance": { "type": "boolean", "description": "Whether account balance contributes to total net worth. Optional (defaults to true if omitted)." },
+        "isSynced": { "type": "boolean", "description": "Legacy cloud sync flag." },
+        "isDeleted": { "type": "boolean", "description": "Legacy soft delete flag." }
+      },
+      "required": ["id", "name"]
+    },
+    "BudgetEntity": {
+      "type": "object",
+      "description": "Represents a budget goal.",
+      "properties": {
+        "id": { "type": "string", "format": "uuid", "description": "Unique UUID identifier for the budget (Primary Key)." },
+        "name": { "type": "string", "description": "Name of the budget." },
+        "amount": { "type": "number", "description": "Target budget limit amount." },
+        "categoryIdsSerialized": { "type": ["string", "null"], "description": "Serialized list of category IDs included in this budget." },
+        "accountIdsSerialized": { "type": ["string", "null"], "description": "Serialized list of account IDs included in this budget." },
+        "orderId": { "type": "number", "description": "Sorting order index." },
+        "isSynced": { "type": "boolean", "description": "Legacy cloud sync flag." },
+        "isDeleted": { "type": "boolean", "description": "Legacy soft delete flag." }
+      },
+      "required": ["id", "name", "amount"]
+    },
+    "CategoryEntity": {
+      "type": "object",
+      "description": "Represents a transaction category.",
+      "properties": {
+        "id": { "type": "string", "format": "uuid", "description": "Unique UUID identifier for the category (Primary Key)." },
+        "name": { "type": "string", "description": "Category name." },
+        "color": { "type": "integer", "description": "Color integer for UI." },
+        "icon": { "type": ["string", "null"], "description": "Icon identifier." },
+        "orderNum": { "type": "number", "description": "Sorting order index." },
+        "isSynced": { "type": "boolean", "description": "Legacy cloud sync flag." },
+        "isDeleted": { "type": "boolean", "description": "Legacy soft delete flag." }
+      },
+      "required": ["id", "name"]
+    },
+    "TransactionEntity": {
+      "type": "object",
+      "description": "Represents an income, expense, or transfer financial transaction.",
+      "properties": {
+        "id": { "type": "string", "format": "uuid", "description": "Unique UUID identifier for the transaction (Primary Key)." },
+        "accountId": { "type": "string", "format": "uuid", "description": "UUID of the source account." },
+        "type": { "type": "string", "enum": ["INCOME", "EXPENSE", "TRANSFER"], "description": "Transaction type." },
+        "amount": { "type": "number", "description": "Transaction monetary amount." },
+        "toAccountId": { "type": ["string", "null"], "format": "uuid", "description": "Destination account UUID for transfers." },
+        "toAmount": { "type": ["number", "null"], "description": "Destination amount for multi-currency transfers." },
+        "title": { "type": ["string", "null"], "description": "Transaction title or payee." },
+        "description": { "type": ["string", "null"], "description": "Optional notes or description." },
+        "dateTime": { "type": ["integer", "null"], "description": "Epoch milliseconds timestamp when transaction occurred." },
+        "categoryId": { "type": ["string", "null"], "format": "uuid", "description": "Associated category UUID." },
+        "dueDate": { "type": ["integer", "null"], "description": "Epoch milliseconds timestamp for due date." },
+        "recurringRuleId": { "type": ["string", "null"], "format": "uuid", "description": "Associated recurring rule UUID." },
+        "paidForDateTime": { "type": ["integer", "null"], "description": "Epoch milliseconds timestamp for original paid-for date." },
+        "attachmentUrl": { "type": ["string", "null"], "description": "Receipt or attachment file path/URL." },
+        "loanId": { "type": ["string", "null"], "format": "uuid", "description": "Linked loan UUID." },
+        "loanRecordId": { "type": ["string", "null"], "format": "uuid", "description": "Linked loan record UUID." },
+        "locationLat": { "type": ["number", "null"], "description": "Latitude coordinate." },
+        "locationLng": { "type": ["number", "null"], "description": "Longitude coordinate." },
+        "locationName": { "type": ["string", "null"], "description": "Human-readable location name." },
+        "isSynced": { "type": "boolean", "description": "Legacy cloud sync flag." },
+        "isDeleted": { "type": "boolean", "description": "Legacy soft delete flag." }
+      },
+      "required": ["id", "accountId", "type", "amount"]
+    },
+    "LoanEntity": {
+      "type": "object",
+      "description": "Represents a debt or loan entity.",
+      "properties": {
+        "id": { "type": "string", "format": "uuid", "description": "Unique UUID identifier for the loan (Primary Key)." },
+        "name": { "type": "string", "description": "Loan title/person name." },
+        "amount": { "type": "number", "description": "Total loan amount." },
+        "currency": { "type": ["string", "null"], "description": "Loan currency." },
+        "accountId": { "type": ["string", "null"], "format": "uuid", "description": "Associated account UUID." },
+        "type": { "type": "string", "description": "Loan type (e.g., I_OWE, THEY_OWE)." },
+        "isClosed": { "type": "boolean", "description": "Whether loan is closed." },
+        "color": { "type": "integer", "description": "UI color." },
+        "icon": { "type": ["string", "null"], "description": "Icon identifier." },
+        "orderNum": { "type": "number", "description": "Sorting order index." },
+        "note": { "type": ["string", "null"], "description": "Loan notes." },
+        "dateTime": { "type": ["integer", "null"], "description": "Epoch milliseconds creation timestamp." },
+        "isSynced": { "type": "boolean", "description": "Legacy cloud sync flag." },
+        "isDeleted": { "type": "boolean", "description": "Legacy soft delete flag." }
+      },
+      "required": ["id", "name", "amount", "type"]
+    },
+    "LoanRecordEntity": {
+      "type": "object",
+      "description": "Represents a partial payment or adjustment record on a loan.",
+      "properties": {
+        "id": { "type": "string", "format": "uuid", "description": "Unique UUID identifier (Primary Key)." },
+        "loanId": { "type": "string", "format": "uuid", "description": "Associated loan UUID." },
+        "amount": { "type": "number", "description": "Record amount." },
+        "note": { "type": ["string", "null"], "description": "Record notes." },
+        "dateTime": { "type": ["integer", "null"], "description": "Epoch milliseconds timestamp." },
+        "interest": { "type": "boolean", "description": "Whether record is interest." },
+        "accountId": { "type": ["string", "null"], "format": "uuid", "description": "Account used for payment." },
+        "convertedAmount": { "type": ["number", "null"], "description": "Converted amount in account currency." },
+        "loanRecordType": { "type": "string", "description": "Type of loan record (e.g. DECREASE, INCREASE)." },
+        "isSynced": { "type": "boolean", "description": "Legacy cloud sync flag." },
+        "isDeleted": { "type": "boolean", "description": "Legacy soft delete flag." }
+      },
+      "required": ["id", "loanId", "amount"]
+    },
+    "PlannedPaymentRuleEntity": {
+      "type": "object",
+      "description": "Represents a recurring planned payment rule.",
+      "properties": {
+        "id": { "type": "string", "format": "uuid", "description": "Unique UUID identifier (Primary Key)." },
+        "startDate": { "type": ["integer", "null"], "description": "Epoch milliseconds start timestamp." },
+        "intervalN": { "type": ["integer", "null"], "description": "Recurrence interval multiplier." },
+        "intervalType": { "type": ["string", "null"], "description": "Recurrence interval unit." },
+        "oneTime": { "type": "boolean", "description": "Whether it's a one-time reminder or recurring." },
+        "type": { "type": "string", "description": "Transaction type generated by rule." },
+        "accountId": { "type": "string", "format": "uuid", "description": "Default account UUID." },
+        "amount": { "type": "number", "description": "Default amount." },
+        "categoryId": { "type": ["string", "null"], "format": "uuid", "description": "Default category UUID." },
+        "title": { "type": ["string", "null"], "description": "Payment title." },
+        "description": { "type": ["string", "null"], "description": "Payment description." },
+        "isSynced": { "type": "boolean", "description": "Legacy cloud sync flag." },
+        "isDeleted": { "type": "boolean", "description": "Legacy soft delete flag." }
+      },
+      "required": ["id", "type", "accountId"]
+    },
+    "SettingsEntity": {
+      "type": "object",
+      "description": "App settings record stored in the database.",
+      "properties": {
+        "id": { "type": "string", "format": "uuid", "description": "Unique UUID identifier for settings record." },
+        "theme": { "type": "string", "enum": ["LIGHT", "DARK", "AUTO", "AMOLED_DARK"], "description": "Application theme." },
+        "currency": { "type": "string", "description": "Base currency code." },
+        "bufferAmount": { "type": "number", "description": "Buffer amount." },
+        "name": { "type": "string", "description": "User profile name." },
+        "isSynced": { "type": "boolean", "description": "Legacy cloud sync flag." },
+        "isDeleted": { "type": "boolean", "description": "Legacy soft delete flag." }
+      },
+      "required": ["id", "theme", "currency", "bufferAmount", "name"]
+    },
+    "TagEntity": {
+      "type": "object",
+      "description": "Represents a custom tag.",
+      "properties": {
+        "id": { "type": "string", "format": "uuid", "description": "Unique UUID identifier (Primary Key)." },
+        "name": { "type": "string", "description": "Tag name." },
+        "description": { "type": ["string", "null"], "description": "Tag description." },
+        "color": { "type": "integer", "description": "Tag color integer." },
+        "icon": { "type": ["string", "null"], "description": "Tag icon identifier." },
+        "orderNum": { "type": "number", "description": "Sorting order index." },
+        "dateTime": { "type": ["integer", "null"], "description": "Epoch milliseconds creation timestamp." },
+        "isDeleted": { "type": "boolean", "description": "Legacy soft delete flag." },
+        "lastSyncedTime": { "type": ["integer", "null"], "description": "Epoch milliseconds last sync timestamp." }
+      },
+      "required": ["id", "name"]
+    },
+    "TagAssociationEntity": {
+      "type": "object",
+      "description": "Links a tag to a transaction or entity.",
+      "properties": {
+        "tagId": { "type": "string", "format": "uuid", "description": "Tag UUID." },
+        "associatedId": { "type": "string", "format": "uuid", "description": "Associated entity (e.g. transaction) UUID." },
+        "lastSyncedTime": { "type": ["integer", "null"], "description": "Epoch milliseconds last sync timestamp." },
+        "isDeleted": { "type": "boolean", "description": "Legacy soft delete flag." }
+      },
+      "required": ["tagId", "associatedId"]
+    }
+  }
+}

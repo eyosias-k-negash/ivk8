@@ -1,0 +1,20 @@
+{
+  "name": "ivy-wallet-plus",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ivy Wallet Plus: personal finance dashboard over Ivy Wallet backups in Google Drive",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "workspaces": [
+    "packages/*",
+    "services/*"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "dev:analytics": "npm run dev -w @ivy/analytics-service",
+    "dev:drive": "npm run dev -w @ivy/drive-sync-service",
+    "dev:web": "npm run dev -w @ivy/web-dashboard"
+  }
+}

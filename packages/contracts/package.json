@@ -1,0 +1,11 @@
+{
+  "name": "@ivy/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared API types between web-dashboard, drive-sync-service and analytics-service (types only, no runtime code)",
+  "exports": { ".": "./src/index.ts" },
+  "types": "./src/index.ts",
+  "scripts": { "typecheck": "tsc -p tsconfig.json" },
+  "devDependencies": { "typescript": "^7.0.2" }
+}

@@ -1,0 +1,138 @@
+name: ci
+
+# Every PR and every push to main: test -> scan -> build -> deploy to an ephemeral k3d cluster -> smoke test.
+# Any HIGH/CRITICAL finding or leaked secret fails the run and blocks the merge (make these required checks).
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  test:
+    name: typecheck + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: "${{ env.NODE_VERSION }}", cache: npm }
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Dependency audit (runtime deps)
+        run: npm audit --omit=dev --audit-level=high
+
+  secrets:
+    name: secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  manifests:
+    name: k8s manifests (kubeconform + trivy config)
+    runs-on: ubuntu-latest
+    permissions: { contents: read, security-events: write }
+    steps:
+      - uses: actions/checkout@v5
+      - name: Render + schema-validate overlays
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz | tar xz kubeconform
+          for o in local ci; do kubectl kustomize k8s/overlays/$o | ./kubeconform -strict -summary -; done
+      - name: Misconfiguration scan (k8s + Dockerfiles)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          scan-type: config
+          scan-ref: .
+          trivy-config: trivy.yaml
+          format: sarif
+          output: trivy-config.sarif
+          exit-code: "1"
+      - if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with: { sarif_file: trivy-config.sarif, category: trivy-config }
+
+  images:
+    name: image ${{ matrix.service }}
+    needs: test
+    runs-on: ubuntu-latest
+    permissions: { contents: read, security-events: write }
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [analytics-service, drive-sync-service, web-dashboard]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/${{ matrix.service }}/Dockerfile
+          tags: ivy/${{ matrix.service }}:ci
+          load: true
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+      - name: Vulnerability scan (blocks on fixable HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: ivy/${{ matrix.service }}:ci
+          trivy-config: trivy.yaml
+          format: sarif
+          output: trivy-${{ matrix.service }}.sarif
+          exit-code: "1"
+      - if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with: { sarif_file: "trivy-${{ matrix.service }}.sarif", category: "trivy-${{ matrix.service }}" }
+      - run: docker save ivy/${{ matrix.service }}:ci -o ${{ matrix.service }}.tar
+      - uses: actions/upload-artifact@v4
+        with: { name: "image-${{ matrix.service }}", path: "${{ matrix.service }}.tar", retention-days: 1 }
+
+  deploy-smoke:
+    name: deploy to ephemeral k3d + smoke test
+    needs: [images, manifests, secrets]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with: { pattern: image-*, merge-multiple: true }
+      - name: Install k3d
+        run: curl -sSL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.8.3 bash
+      - name: Create cluster
+        run: k3d cluster create ivy --agents 1 -p "8080:80@loadbalancer" --wait
+      - name: Import images
+        run: |
+          for s in analytics-service drive-sync-service web-dashboard; do docker load -i $s.tar; done
+          k3d image import -c ivy ivy/analytics-service:ci ivy/drive-sync-service:ci ivy/web-dashboard:ci
+      - name: Secrets (throwaway values; no real Google credentials in CI)
+        env:
+          GOOGLE_CLIENT_ID: ci-dummy.apps.googleusercontent.com
+          GOOGLE_CLIENT_SECRET: ci-dummy
+        run: SESSION_SECRET="$(openssl rand -hex 32)" bash scripts/create-secrets.sh
+      - name: Deploy
+        run: |
+          kubectl apply -k k8s/overlays/ci
+          for d in analytics-service drive-sync-service web-dashboard; do
+            kubectl -n ivy rollout status deploy/$d --timeout=180s
+          done
+      - name: Smoke test
+        run: bash scripts/smoke-test.sh
+      - name: Diagnostics
+        if: failure()
+        run: |
+          kubectl -n ivy get all,networkpolicy,ingress
+          kubectl -n ivy describe pods | tail -n 200
+          kubectl -n ivy logs -l app.kubernetes.io/part-of=ivy-wallet-plus --tail=100 --prefix || true
