@@ -66,6 +66,24 @@ describe('analytics API', () => {
   });
 
   it('unimplemented reports answer 501, not 404', async () => {
-    expect((await app().inject(`/datasets/${key}/summary`)).statusCode).toBe(501);
+    expect((await app().inject(`/datasets/${key}/budgets`)).statusCode).toBe(501);
+  });
+});
+
+describe('summary + timeseries routes', () => {
+  it('serve tz-aware results and validate params', async () => {
+    const a = app();
+    await a.inject({ method: 'PUT', url: `/datasets/${key}`, payload: backup });
+    const q = encodeURIComponent(JSON.stringify({ USD: 130 }));
+    const s = (await a.inject(`/datasets/${key}/summary?from=2026-09-01&to=2026-09-30&rateOverrides=${q}`)).json();
+    expect(s.data.income).toBe(2300);
+
+    const all = (await a.inject(`/datasets/${key}/timeseries?from=all&to=2026-09-30&granularity=month`)).json();
+    expect(all.data.points).toEqual([{ bucket: '2026-09', income: 1000, expense: 0 }]);
+    expect(all.data.unconverted).toEqual(['USD']);
+
+    expect((await a.inject(`/datasets/${key}/timeseries?granularity=hour`)).statusCode).toBe(400);
+    expect((await a.inject(`/datasets/${key}/timeseries?groupBy=tag`)).statusCode).toBe(400);
+    expect((await a.inject(`/datasets/${key}/summary?from=2026-09-10&to=2026-09-01`)).statusCode).toBe(400);
   });
 });

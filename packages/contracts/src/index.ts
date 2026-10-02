@@ -147,6 +147,10 @@ export interface SummaryData {
   net: number;
   byCategory: BreakdownRow[];
   byAccount: (BreakdownRow & { currency: string; incomeNative: number; expenseNative: number })[];
+  /** Transactions counted in the range (executed INCOME/EXPENSE only). */
+  count: number;
+  /** Currencies whose amounts are left out of base totals because no rate was available. */
+  unconverted: string[];
 }
 
 export interface TimeseriesPoint {
@@ -159,9 +163,13 @@ export interface TimeseriesPoint {
 }
 
 export interface TimeseriesData {
+  from: number;
+  to: number;
   granularity: Granularity;
   groupBy: GroupBy;
+  /** Sorted by bucket, then groupName. With groupBy=none every bucket in the range is present (zeros included). */
   points: TimeseriesPoint[];
+  unconverted: string[];
 }
 
 export interface BudgetStatus {

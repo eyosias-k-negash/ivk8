@@ -1,4 +1,4 @@
-import { DEFAULT_TZ, parseTzOffsetMs } from './engine/time';
+import { DEFAULT_TZ, monthRange, parseTzOffsetMs } from './engine/time';
 import type { RateOverrides } from './engine/currency';
 
 export class BadRequest extends Error {
@@ -43,7 +43,38 @@ export function parseInstant(v: unknown, name: string, fallback?: number): numbe
     if (fallback !== undefined) return fallback;
     throw new BadRequest(`${name} is required`);
   }
-  const n = typeof v === 'string' && /^\d+$/.test(v) ? Number(v) : Date.parse(String(v));
+  const n =
+    typeof v === 'number' ? v : typeof v === 'string' && /^\d+$/.test(v) ? Number(v) : Date.parse(String(v));
   if (!Number.isFinite(n)) throw new BadRequest(`${name} is not a valid date`);
   return n;
+}
+
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * Date-range params for summary/timeseries, interpreted in the request timezone.
+ * - `from`: epoch ms, ISO instant, or YYYY-MM-DD (= 00:00 local that day). Inclusive.
+ * - `to`:   epoch ms, ISO instant, or YYYY-MM-DD (= the whole local day is included). Exclusive instant.
+ * Defaults: the current calendar month in `tz` up to now.
+ */
+export function parseRange(
+  q: Record<string, unknown>,
+  tz: string,
+  nowMs: number = Date.now(),
+): { from: number; to: number } {
+  const off = parseTzOffsetMs(tz);
+  const local = (v: unknown, name: string, endOfDay: boolean): number | undefined => {
+    if (v == null || v === '') return undefined;
+    const m = DATE_ONLY.exec(String(v));
+    if (m) {
+      const startUtc = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + (endOfDay ? 1 : 0));
+      if (!Number.isFinite(startUtc)) throw new BadRequest(`${name} is not a valid date`);
+      return startUtc - off;
+    }
+    return parseInstant(v, name);
+  };
+  const from = local(q.from, 'from', false) ?? monthRange(nowMs, tz).startMs;
+  const to = local(q.to, 'to', true) ?? nowMs;
+  if (from >= to) throw new BadRequest('from must be before to');
+  return { from, to };
 }

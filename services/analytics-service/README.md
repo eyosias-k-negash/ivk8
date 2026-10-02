@@ -16,9 +16,10 @@ npm test -w @ivy/analytics-service
 | `src/engine/balances.ts` | Native balances as of a date |
 | `src/engine/currency.ts` | Rate table, overrides, `toBase` |
 | `src/rates/rateService.ts` | ECB fetch, 1 h cache, stale fallback, optional fallback provider |
-| `src/reports/` | Report builders (transactions, balances; others TODO) |
+| `src/reports/index.ts` | Transactions table, balances / net worth |
+| `src/reports/flows.ts` | Income/expense summary and timeseries (buckets, groupBy, gap filling) |
 | `src/server.ts` | Fastify routes, `{ baseCurrency, tz, ratesUsed, warnings, data }` envelope |
 
 Env: `PORT`, `MAX_BACKUP_BYTES`, `DATASET_CACHE_SIZE`, `DATASET_TTL_MS`, `RATES_TTL_MS`, `ECB_URL`, `FALLBACK_RATES_URL`.
 
-Next (plan §7): summary → timeseries → budgets → planned → tags → payees, then the golden test on a sanitized real backup.
+Next (plan §7): budgets → planned → tags → payees, then the golden test on a sanitized real backup.

@@ -27,10 +27,11 @@ Code lives in `services/analytics-service/` (monorepo rescaffold, see ARCHITECTU
 | Rate fetching: ECB daily XML, 1 h cache, stale flag, optional fallback provider hook, overrides, `ratesUsed` | done, tested |
 | API wiring (Fastify), param parsing, error envelope | done, tested |
 | Reports: transactions table, balances / net worth | done |
-| Reports: summary, timeseries (Tier 0); budgets, planned, tags, payees (Tier 1) | routes return `501`; next |
+| Reports: summary + timeseries (by category / account, day/week/month/year, gap-filled, tz-aware) + dashboard views | done, tested (2026-10-02) |
+| Reports: budgets, planned, tags, payees (Tier 1) | routes return `501`; next |
 | Sanity check + golden test on a real backup | not started |
 
-54 tests pass, typecheck clean. Roughly 22 to 25 of the Tier 0 hours are spent.
+69 analytics tests pass, typecheck clean. Roughly 29 to 32 of the Tier 0 hours are spent; Tier 0 code is complete except the real-backup sanity check and golden test.
 
 ## 2. Architecture: stateless and in-memory
 
@@ -128,7 +129,7 @@ Only drive-sync calls these; the browser reaches the same reports as `/api/backu
 | `GET /datasets/:key/rates` | Rates used, with source and staleness |
 | `GET /datasets/:key/transactions` | Transaction table rows (native + base amount, status, tags) |
 | `GET /datasets/:key/balances?asOf=` | Per-account native balance + base-converted balance, net worth |
-| `GET /datasets/:key/summary?from=&to=` | Income, expense, net; by category; by account |
+| `GET /datasets/:key/summary?from=&to=` | Income, expense, net; by category; by account. `from`/`to` = epoch ms, ISO instant or `YYYY-MM-DD` in the request tz (`to` date is inclusive); `from=all` = since first transaction; default = current month |
 | `GET /datasets/:key/timeseries?from=&to=&granularity=&groupBy=` | Bucketed income/expense, optional category/account split |
 | `GET /datasets/:key/budgets?date=` *(Tier 1)* | Budget status list |
 | `GET /datasets/:key/planned` *(Tier 1)* | Overdue and upcoming planned transactions |
@@ -145,7 +146,7 @@ Every report accepts `tz` (default `+03:00`) and `rateOverrides`, and returns `{
 | Setup, ajv validation, loader, indexes | 4 | done |
 | Currency module (fetch, cache, fallback, cross rates, overrides, `ratesUsed`) | 8 | done (fallback provider not chosen) |
 | Balance / net-worth engine | 4 | done |
-| Summary + timeseries + breakdowns, timezone-aware, converted | 7 | todo |
+| Summary + timeseries + breakdowns, timezone-aware, converted | 7 | done |
 | API wiring, param parsing, error handling | 4 | done |
 | Golden tests + mocked-rate tests | 6 | mocked-rate done; golden todo |
 

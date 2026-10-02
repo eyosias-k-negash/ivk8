@@ -96,10 +96,11 @@ Make the CI jobs required status checks on `main` so a failing gate blocks the m
 |---|---|
 | Engine: validation, rules, timezone bucketing, balances, FX core | done, tested |
 | FX fetching: ECB, cache, stale, fallback hook, overrides, `ratesUsed` | done, tested |
-| Reports: transactions, balances / net worth | done |
-| Reports: summary, timeseries, budgets, planned, tags, payees | routes return `501`; next per plan §7 |
+| Reports: transactions, balances / net worth, income & expense summary, trends (timeseries) | done, tested |
+| Reports: budgets, planned, tags, payees (Tier 1) | routes return `501`; next per plan §7 |
 | drive-sync: OAuth, session, folder, listing, size limit, backoff, proxy + re-ingest | done, tested |
-| Dashboard: all flows wired; unimplemented reports show "coming soon" | scaffolded |
+| Dashboard: transactions, balances, income & expense, trends (charts + table view), rates & timezone | done |
+| Dashboard: budgets, planned, tags, payees | tabs show "coming soon" until the reports land |
 | k8s, CI and release | written; first real run pending |
 | Golden test against a real backup | pending (needs a sanitized real backup) |
 

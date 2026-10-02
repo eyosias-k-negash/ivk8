@@ -8,6 +8,7 @@ import { Warnings } from '../components/Warnings';
 import { RatesTable } from '../components/RatesTable';
 import { TransactionsTable } from '../components/TransactionsTable';
 import { fmtMoney } from '../format';
+import { RangePicker, SummaryTab, TrendsTab, presetRange, type DateRange } from '../components/FlowReports';
 
 const TABS = ['Transactions', 'Balances', 'Income & expense', 'Trends', 'Budgets', 'Planned', 'Tags', 'Payees', 'Rates & timezone'] as const;
 type Tab = (typeof TABS)[number];
@@ -15,6 +16,8 @@ type Tab = (typeof TABS)[number];
 /** Flows 3–7 for one opened backup. */
 export function BackupView({ fileId, onBack }: { fileId: string; onBack: () => void }) {
   const [tab, setTab] = useState<Tab>('Transactions');
+  const { tz } = useParams();
+  const [range, setRange] = useState<DateRange>(() => presetRange('thisMonth', tz));
   const rates = useReport<null>(fileId, 'rates'); // also warms the dataset in analytics
 
   return (
@@ -29,8 +32,9 @@ export function BackupView({ fileId, onBack }: { fileId: string; onBack: () => v
       </nav>
       {tab === 'Transactions' && <TransactionsTab fileId={fileId} />}
       {tab === 'Balances' && <BalancesTab fileId={fileId} />}
-      {tab === 'Income & expense' && <Pending fileId={fileId} report="summary" />}
-      {tab === 'Trends' && <Pending fileId={fileId} report="timeseries" />}
+      {(tab === 'Income & expense' || tab === 'Trends') && <RangePicker value={range} onChange={setRange} />}
+      {tab === 'Income & expense' && <SummaryTab fileId={fileId} range={range} />}
+      {tab === 'Trends' && <TrendsTab fileId={fileId} range={range} />}
       {tab === 'Budgets' && <Pending fileId={fileId} report="budgets" />}
       {tab === 'Planned' && <Pending fileId={fileId} report="planned" />}
       {tab === 'Tags' && (

@@ -1,0 +1,552 @@
+
+===== kubectl context + versions =====
+kubernetes-admin@kubernetes
+Client Version: v1.36.2
+Kustomize Version: v5.8.1
+Server Version: v1.36.4
+v4.2.2+gb05881c
+Docker version 29.6.1, build 8900f1d330
+ctr: present
+podman: present
+
+===== nodes (runtime, IPs) =====
+NAME              STATUS   ROLES           AGE   VERSION   INTERNAL-IP     EXTERNAL-IP   OS-IMAGE                       KERNEL-VERSION                              CONTAINER-RUNTIME
+desktop-o17oefv   Ready    <none>          10d   v1.36.3   192.168.0.128   <none>        Ubuntu 24.04.1 LTS             6.18.33.2-microsoft-standard-WSL2 (amd64)   containerd://2.3.5
+hostname          Ready    control-plane   10d   v1.36.4   192.168.0.180   <none>        Arch Linux                     7.0.14-arch1-1 (amd64)                      containerd://2.3.2
+raspberrypi       Ready    <none>          10d   v1.36.4   192.168.0.104   <none>        Debian GNU/Linux 13 (trixie)   6.18.34+rpt-rpi-v8 (arm64)                  containerd://2.3.2
+
+===== taints =====
+NAME              TAINTS
+desktop-o17oefv   <none>
+hostname          node-role.kubernetes.io/control-plane
+raspberrypi       <none>
+
+===== node labels =====
+NAME              STATUS   ROLES           AGE   VERSION   LABELS
+desktop-o17oefv   Ready    <none>          10d   v1.36.3   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/os=linux,kubernetes.io/arch=amd64,kubernetes.io/hostname=desktop-o17oefv,kubernetes.io/os=linux
+hostname          Ready    control-plane   10d   v1.36.4   beta.kubernetes.io/arch=amd64,beta.kubernetes.io/os=linux,kubernetes.io/arch=amd64,kubernetes.io/hostname=hostname,kubernetes.io/os=linux,node-role.kubernetes.io/control-plane=,node.kubernetes.io/exclude-from-external-load-balancers=
+raspberrypi       Ready    <none>          10d   v1.36.4   beta.kubernetes.io/arch=arm64,beta.kubernetes.io/os=linux,kubernetes.io/arch=arm64,kubernetes.io/hostname=raspberrypi,kubernetes.io/os=linux,storage=ssd
+
+===== namespaces (with labels, incl. pod-security) =====
+NAME              STATUS   AGE   LABELS
+access            Active   10d   kubernetes.io/metadata.name=access
+default           Active   10d   kubernetes.io/metadata.name=default
+kube-node-lease   Active   10d   kubernetes.io/metadata.name=kube-node-lease
+kube-public       Active   10d   kubernetes.io/metadata.name=kube-public
+kube-system       Active   10d   kubernetes.io/metadata.name=kube-system
+limited           Active   10d   kubernetes.io/metadata.name=limited
+restricted        Active   10d   kubernetes.io/metadata.name=restricted
+traefik           Active   13h   kubernetes.io/metadata.name=traefik,name=traefik
+
+===== kube-system pods (CNI, DNS) =====
+NAME                                      READY   STATUS    RESTARTS       AGE     IP              NODE              NOMINATED NODE   READINESS GATES   LABELS
+calico-kube-controllers-c57dfffd6-lx8jv   1/1     Running   87 (13h ago)   10d     172.17.243.75   hostname          <none>           <none>            k8s-app=calico-kube-controllers,pod-template-hash=c57dfffd6
+calico-node-2kwlk                         1/1     Running   1 (13h ago)    9d      192.168.0.128   desktop-o17oefv   <none>           <none>            controller-revision-hash=56f776ff77,k8s-app=calico-node,pod-template-generation=3
+calico-node-7sqh4                         1/1     Running   3 (13h ago)    9d      192.168.0.180   hostname          <none>           <none>            controller-revision-hash=56f776ff77,k8s-app=calico-node,pod-template-generation=3
+calico-node-9hfmq                         1/1     Running   4 (5h7m ago)   9d      192.168.0.104   raspberrypi       <none>           <none>            controller-revision-hash=56f776ff77,k8s-app=calico-node,pod-template-generation=3
+coredns-589f44dc88-6f2j9                  1/1     Running   3 (13h ago)    10d     172.17.243.76   hostname          <none>           <none>            k8s-app=kube-dns,pod-template-hash=589f44dc88
+coredns-589f44dc88-z6ns6                  1/1     Running   3 (13h ago)    10d     172.17.243.74   hostname          <none>           <none>            k8s-app=kube-dns,pod-template-hash=589f44dc88
+etcd-hostname                             1/1     Running   13 (13h ago)   8d      192.168.0.180   hostname          <none>           <none>            component=etcd,tier=control-plane
+kube-apiserver-hostname                   1/1     Running   58 (13h ago)   8d      192.168.0.180   hostname          <none>           <none>            component=kube-apiserver,tier=control-plane
+kube-controller-manager-hostname          1/1     Running   17 (13h ago)   10d     192.168.0.180   hostname          <none>           <none>            component=kube-controller-manager,tier=control-plane
+kube-proxy-f45mk                          1/1     Running   5 (5h7m ago)   10d     192.168.0.104   raspberrypi       <none>           <none>            controller-revision-hash=65b6f4fc8b,k8s-app=kube-proxy,pod-template-generation=1
+kube-proxy-j55jh                          1/1     Running   3 (13h ago)    10d     192.168.0.180   hostname          <none>           <none>            controller-revision-hash=65b6f4fc8b,k8s-app=kube-proxy,pod-template-generation=1
+kube-proxy-xhntn                          1/1     Running   2 (13h ago)    10d     192.168.0.128   desktop-o17oefv   <none>           <none>            controller-revision-hash=65b6f4fc8b,k8s-app=kube-proxy,pod-template-generation=1
+kube-scheduler-hostname                   1/1     Running   16 (13h ago)   10d     192.168.0.180   hostname          <none>           <none>            component=kube-scheduler,tier=control-plane
+metrics-server-589cd6fccb-9w8qb           1/1     Running   0              4h42m   172.17.246.43   raspberrypi       <none>           <none>            k8s-app=metrics-server,pod-template-hash=589cd6fccb
+
+===== CNI detection (all namespaces) =====
+kube-system   calico-kube-controllers-c57dfffd6-lx8jv   1/1   Running   87 (13h ago)   10d
+kube-system   calico-node-2kwlk                         1/1   Running   1 (13h ago)    9d
+kube-system   calico-node-7sqh4                         1/1   Running   3 (13h ago)    9d
+kube-system   calico-node-9hfmq                         1/1   Running   4 (5h7m ago)   9d
+bgpconfigurations.crd.projectcalico.org               2026-09-21T15:54:50Z
+bgppeers.crd.projectcalico.org                        2026-09-21T15:54:50Z
+blockaffinities.crd.projectcalico.org                 2026-09-21T15:54:50Z
+caliconodestatuses.crd.projectcalico.org              2026-09-21T15:54:50Z
+clusterinformations.crd.projectcalico.org             2026-09-21T15:54:50Z
+felixconfigurations.crd.projectcalico.org             2026-09-21T15:54:50Z
+globalnetworkpolicies.crd.projectcalico.org           2026-09-21T15:54:50Z
+globalnetworksets.crd.projectcalico.org               2026-09-21T15:54:50Z
+hostendpoints.crd.projectcalico.org                   2026-09-21T15:54:50Z
+ipamblocks.crd.projectcalico.org                      2026-09-21T15:54:50Z
+ipamconfigs.crd.projectcalico.org                     2026-09-21T15:54:50Z
+ipamhandles.crd.projectcalico.org                     2026-09-21T15:54:50Z
+ippools.crd.projectcalico.org                         2026-09-21T15:54:50Z
+ipreservations.crd.projectcalico.org                  2026-09-21T15:54:50Z
+kubecontrollersconfigurations.crd.projectcalico.org   2026-09-21T15:54:50Z
+networkpolicies.crd.projectcalico.org                 2026-09-21T15:54:50Z
+networksets.crd.projectcalico.org                     2026-09-21T15:54:50Z
+
+===== ingress controllers / classes =====
+NAME                CONTROLLER                      PARAMETERS   AGE
+traefik (default)   traefik.io/ingress-controller   <none>       13h
+traefik       traefik-5594d755df-79ft8                  1/1   Running   0              4h42m
+default       lab126service              NodePort       10.102.184.72   <none>        80:32567/TCP                 10d
+default       lab1310pod                 NodePort       10.107.188.69   <none>        80:31445/TCP                 8d
+traefik       traefik                    LoadBalancer   10.99.91.220    <pending>     80:30080/TCP,443:30443/TCP   13h
+
+===== LoadBalancer support (MetalLB etc.) =====
+none found
+
+===== existing ivy resources (if any) =====
+none
+
+===== repo: tree =====
+total 240
+drwxr-xr-x  11 rega rega   4096 Oct  2 13:29 .
+drwxr-xr-x   5 rega rega   4096 Oct  2 13:00 ..
+drwx------   2 rega rega   4096 Oct  2 00:58 Claude outputs
+-rw-r--r--   1 rega rega   8264 Oct  2 13:33 cluster-info.txt
+-rw-------   1 rega rega     34 Oct  1 14:11 .directory
+-rw-------   1 rega rega     83 Oct  1 15:27 .dockerignore
+drwx------   3 rega rega   4096 Oct  2 00:58 docs
+-rw-------   1 rega rega    433 Oct  1 15:27 .env.example
+drwxr-xr-x   7 rega rega   4096 Oct  1 22:10 .git
+drwxr-xr-x   3 rega rega   4096 Oct  1 15:27 .github
+-rw-------   1 rega rega    220 Oct  1 15:27 .gitignore
+-rw-------   1 rega rega    212 Oct  1 15:27 .gitleaks.toml
+drwx------   4 rega rega   4096 Oct  1 14:16 k8s
+-rw-r--r--   1 rega rega   1567 Oct  1 15:27 Makefile
+drwxr-xr-x 116 rega rega   4096 Oct  1 22:11 node_modules
+-rw-------   1 rega rega    654 Oct  1 15:27 package.json
+-rw-------   1 rega rega 140614 Oct  1 22:11 package-lock.json
+drwx------   3 rega rega   4096 Oct  1 15:27 packages
+-rw-------   1 rega rega   6879 Oct  2 00:58 README.md
+drwx------   2 rega rega   4096 Oct  1 15:28 scripts
+drwx------   5 rega rega   4096 Oct  1 14:16 services
+-rw-------   1 rega rega    190 Oct  1 15:29 trivy.yaml
+-rw-------   1 rega rega    373 Oct  1 15:29 tsconfig.base.json
+k8s/base/analytics-service/deployment.yaml
+k8s/base/analytics-service/service.yaml
+k8s/base/drive-sync-service/configmap.yaml
+k8s/base/drive-sync-service/deployment.yaml
+k8s/base/drive-sync-service/service.yaml
+k8s/base/ingress.yaml
+k8s/base/kustomization.yaml
+k8s/base/namespace.yaml
+k8s/base/network-policies/analytics.yaml
+k8s/base/network-policies/default-deny.yaml
+k8s/base/network-policies/drive-sync.yaml
+k8s/base/network-policies/ingress-controller.yaml
+k8s/base/web-dashboard/deployment.yaml
+k8s/base/web-dashboard/service.yaml
+k8s/overlays/ci/kustomization.yaml
+k8s/overlays/local/kustomization.yaml
+scripts/build-images.sh
+scripts/create-secrets.sh
+scripts/k3d-down.sh
+scripts/k3d-up.sh
+scripts/smoke-test.sh
+
+===== repo: Makefile =====
+# Ivy Wallet Plus. `make up` is the one command to a running stack (k3d + kustomize).
+.DEFAULT_GOAL := help
+SHELL := /bin/bash
+
+.PHONY: help install typecheck test build check up down smoke images k8s-render k8s-validate scan logs
+
+help: ## Show targets
+	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
+
+install: ## Install workspace dependencies
+	npm ci
+
+typecheck: ## Typecheck all workspaces
+	npm run typecheck
+
+test: ## Unit + API tests for all services
+	npm test
+
+build: ## Build all services (bundles + SPA)
+	npm run build
+
+check: typecheck test k8s-validate ## Everything CI runs before images
+
+up: ## Create/update local k3d cluster and deploy everything (needs .env)
+	bash scripts/k3d-up.sh
+
+down: ## Delete the local k3d cluster
+	bash scripts/k3d-down.sh
+
+smoke: ## Smoke-test the running cluster
+	bash scripts/smoke-test.sh
+
+images: ## Build the three images (tag: local)
+	bash scripts/build-images.sh local
+
+k8s-render: ## Print rendered manifests for the local overlay
+	kubectl kustomize k8s/overlays/local
+
+k8s-validate: ## Schema-validate rendered manifests (needs kubeconform)
+	@for o in local ci; do kubectl kustomize k8s/overlays/$$o | kubeconform -strict -summary -; done
+
+scan: ## Local security scans (needs gitleaks + trivy)
+	gitleaks detect --no-banner --redact
+	trivy fs --config trivy.yaml .
+	trivy config --config trivy.yaml k8s
+
+logs: ## Tail logs of all services
+	kubectl -n ivy logs -f -l app.kubernetes.io/part-of=ivy-wallet-plus --max-log-requests 10 --prefix
+
+===== repo: scripts/create-secrets.sh =====
+#!/usr/bin/env bash
+# Creates/updates the `ivy-secrets` Secret from environment variables or ./.env.
+# Values are piped straight to kubectl and never echoed. Nothing is written to disk.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+NAMESPACE="${NAMESPACE:-ivy}"
+
+if [[ -f .env ]]; then
+  set -a; # shellcheck disable=SC1091
+  source .env; set +a
+fi
+
+for v in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET SESSION_SECRET; do
+  if [[ -z "${!v:-}" ]]; then
+    echo "error: $v is not set (put it in .env, see .env.example)" >&2
+    exit 1
+  fi
+done
+if (( ${#SESSION_SECRET} < 32 )); then
+  echo "error: SESSION_SECRET must be at least 32 characters (openssl rand -hex 32)" >&2
+  exit 1
+fi
+
+kubectl get namespace "$NAMESPACE" >/dev/null 2>&1 || kubectl create namespace "$NAMESPACE" >/dev/null
+
+kubectl -n "$NAMESPACE" create secret generic ivy-secrets \
+  --from-literal=GOOGLE_CLIENT_ID=<REDACTED>
+  --from-literal=GOOGLE_CLIENT_SECRET=<REDACTED>
+  --from-literal=SESSION_SECRET=<REDACTED>
+  --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+
+echo "secret/ivy-secrets applied in namespace $NAMESPACE"
+
+===== repo: .env keys only (no values) =====
+no .env
+
+===== repo: k8s manifests =====
+--- k8s/base/analytics-service/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-service
+spec:
+  # In-memory dataset cache: one replica keeps it warm. More replicas still work
+  # (drive-sync re-ingests on a cache miss), just with extra uploads.
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: analytics-service }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: analytics-service }
+    spec:
+      automountServiceAccountToken: <REDACTED>
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: app
+          image: ivy/analytics-service
+          ports: [{ name: http, containerPort: 8081 }]
+          env:
+            - { name: PORT, value: "8081" }
+            - { name: MAX_BACKUP_BYTES, value: "52428800" }
+            - { name: DATASET_CACHE_SIZE, value: "8" }
+            # Optional: EUR-quoted JSON provider for currencies the ECB lacks (e.g. ETB).
+            - { name: FALLBACK_RATES_URL, value: "" }
+          readinessProbe: { httpGet: { path: /readyz, port: http }, periodSeconds: 10 }
+          livenessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 20 }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 768Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: {} }]
+--- k8s/base/analytics-service/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-service
+spec:
+  selector: { app.kubernetes.io/name: analytics-service }
+  ports: [{ name: http, port: 8081, targetPort: http }]
+--- k8s/base/drive-sync-service/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: drive-sync-config
+data:
+  PORT: "8080"
+  ANALYTICS_URL: http://analytics-service:8081
+  MAX_BACKUP_BYTES: "52428800"
+  PUBLIC_BASE_URL: http://localhost:8080
+--- k8s/base/drive-sync-service/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drive-sync-service
+spec:
+  # Stateless (session lives in an encrypted cookie), so it scales horizontally.
+  replicas: 2
+  selector:
+    matchLabels: { app.kubernetes.io/name: drive-sync-service }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: drive-sync-service }
+    spec:
+      automountServiceAccountToken: <REDACTED>
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: app
+          image: ivy/drive-sync-service
+          ports: [{ name: http, containerPort: 8080 }]
+          envFrom:
+            - configMapRef: { name: drive-sync-config }
+            # GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SESSION_SECRET. Created out of band by
+            # scripts/create-secrets.sh; never committed.
+            - secretRef: <REDACTED>
+          readinessProbe: { httpGet: { path: /readyz, port: http }, periodSeconds: 10 }
+          livenessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 20 }
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { memory: 384Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: [{ name: tmp, emptyDir: {} }]
+--- k8s/base/drive-sync-service/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: drive-sync-service
+spec:
+  selector: { app.kubernetes.io/name: drive-sync-service }
+  ports: [{ name: http, port: 8080, targetPort: http }]
+--- k8s/base/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ivy
+spec:
+  rules:
+    - http:
+        paths:
+          # Only drive-sync is public API; analytics-service is never exposed.
+          - path: /api
+            pathType: Prefix
+            backend: { service: { name: drive-sync-service, port: { name: http } } }
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: web-dashboard, port: { name: http } } }
+--- k8s/base/kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ivy
+labels:
+  - pairs: { app.kubernetes.io/part-of: ivy-wallet-plus }
+    includeTemplates: true
+resources:
+  - namespace.yaml
+  - analytics-service/deployment.yaml
+  - analytics-service/service.yaml
+  - drive-sync-service/configmap.yaml
+  - drive-sync-service/deployment.yaml
+  - drive-sync-service/service.yaml
+  - web-dashboard/deployment.yaml
+  - web-dashboard/service.yaml
+  - ingress.yaml
+  - network-policies/default-deny.yaml
+  - network-policies/ingress-controller.yaml
+  - network-policies/analytics.yaml
+  - network-policies/drive-sync.yaml
+--- k8s/base/namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ivy
+  labels:
+    # Pod Security Admission: reject anything privileged or running as root.
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+--- k8s/base/network-policies/analytics.yaml
+# analytics-service: reachable ONLY from drive-sync-service; may call out only on 443 (ECB rates).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: analytics-service
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: analytics-service } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app.kubernetes.io/name: drive-sync-service } }
+      ports: [{ protocol: TCP, port: 8081 }]
+  egress:
+    - to:
+        - ipBlock: { cidr: 0.0.0.0/0, except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16] }
+      ports: [{ protocol: TCP, port: 443 }]
+--- k8s/base/network-policies/default-deny.yaml
+# Zero-trust baseline: nothing in the namespace talks to anything unless allowed below.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+--- k8s/base/network-policies/drive-sync.yaml
+# drive-sync-service: may call analytics-service and Google APIs (443). Nothing else.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: drive-sync-service
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: drive-sync-service } }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector: { matchLabels: { app.kubernetes.io/name: analytics-service } }
+      ports: [{ protocol: TCP, port: 8081 }]
+    - to:
+        - ipBlock: { cidr: 0.0.0.0/0, except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16] }
+      ports: [{ protocol: TCP, port: 443 }]
+--- k8s/base/network-policies/ingress-controller.yaml
+# The ingress controller (Traefik in kube-system on k3s) may reach the two public services.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-ingress-controller
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: <REDACTED>
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+      ports: [{ protocol: TCP, port: 8080 }]
+--- k8s/base/web-dashboard/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-dashboard
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app.kubernetes.io/name: web-dashboard }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: web-dashboard }
+    spec:
+      automountServiceAccountToken: <REDACTED>
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: app
+          image: ivy/web-dashboard
+          ports: [{ name: http, containerPort: 8080 }]
+          readinessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 10 }
+          livenessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 20 }
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 64Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+--- k8s/base/web-dashboard/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-dashboard
+spec:
+  selector: { app.kubernetes.io/name: web-dashboard }
+  ports: [{ name: http, port: 8080, targetPort: http }]
+--- k8s/overlays/ci/kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Ephemeral k3d cluster in GitHub Actions (smoke test). Images come from the same CI run.
+resources:
+  - ../../base
+images:
+  - { name: ivy/analytics-service, newTag: ci }
+  - { name: ivy/drive-sync-service, newTag: ci }
+  - { name: ivy/web-dashboard, newTag: ci }
+patches:
+  - target: { kind: Ingress, name: ivy }
+    patch: |-
+      - op: add
+        path: /spec/ingressClassName
+        value: traefik
+  # Images are imported into the cluster, never pulled.
+  - target: { kind: Deployment }
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
+  # One replica each is enough for a smoke test.
+  - target: { kind: Deployment }
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+--- k8s/overlays/local/kustomization.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Local k3d cluster (make up). Images are built locally and imported with k3d image import.
+resources:
+  - ../../base
+images:
+  - { name: ivy/analytics-service, newTag: local }
+  - { name: ivy/drive-sync-service, newTag: local }
+  - { name: ivy/web-dashboard, newTag: local }
+patches:
+  - target: { kind: Ingress, name: ivy }
+    patch: |-
+      - op: add
+        path: /spec/ingressClassName
+        value: traefik
+  # Images are imported into the cluster, never pulled.
+  - target: { kind: Deployment }
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
+
+Done. Review this output before sharing.

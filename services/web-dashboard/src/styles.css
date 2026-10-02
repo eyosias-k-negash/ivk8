@@ -1,5 +1,14 @@
-:root { --bg:#f6f7fb; --card:#fff; --fg:#1d2330; --muted:#6b7385; --accent:#4f6bed; --warn:#fff6e0; --err:#fdecec; --border:#e3e6ef; color-scheme: light dark; }
-@media (prefers-color-scheme: dark) { :root { --bg:#12151c; --card:#1b1f29; --fg:#e7eaf2; --muted:#9aa2b5; --warn:#3a3218; --err:#3d1f1f; --border:#2b3140; } }
+:root {
+  /* chart roles (dataviz reference palette, validated light+dark) */
+  --surface-1:#fcfcfb; --viz-muted:#898781; --viz-grid:#e3e6ef;
+  --series-1:#2a78d6; --series-2:#eb6834; --series-3:#1baf7a; --series-4:#eda100;
+  --series-5:#e87ba4; --series-6:#008300; --series-7:#4a3aa7; --series-8:#e34948;
+  --bg:#f6f7fb; --card:#fff; --fg:#1d2330; --muted:#6b7385; --accent:#4f6bed; --warn:#fff6e0; --err:#fdecec; --border:#e3e6ef; color-scheme: light dark; }
+@media (prefers-color-scheme: dark) { :root {
+  --surface-1:#1a1a19; --viz-grid:#2b3140;
+  --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70; --series-4:#c98500;
+  --series-5:#d55181; --series-6:#008300; --series-7:#9085e9; --series-8:#e66767;
+  --bg:#12151c; --card:#1b1f29; --fg:#e7eaf2; --muted:#9aa2b5; --warn:#3a3218; --err:#3d1f1f; --border:#2b3140; } }
 * { box-sizing: border-box; }
 body { margin:0; font:14px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--fg); }
 .topbar { display:flex; justify-content:space-between; padding:12px 16px; border-bottom:1px solid var(--border); background:var(--card); }
@@ -25,3 +34,11 @@ button.link { background:none; border:0; color:var(--accent); cursor:pointer; pa
 .badge { font-size:11px; padding:1px 6px; border-radius:10px; margin-left:6px; background:var(--border); }
 .badge.manual { background:#dfe6ff; color:#2a3d99; } .badge.live { background:#dff5e6; color:#1d6b3a; }
 .badge.fallback { background:#fff0d6; color:#8a5a00; } .badge.unavailable, .badge.stale { background:#fde0e0; color:#9b1c1c; }
+
+.controls { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; margin:8px 0 12px; }
+.controls select { padding:6px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--fg); }
+.kpis { display:flex; flex-wrap:wrap; gap:12px; margin:12px 0; }
+.kpi { border:1px solid var(--border); border-radius:8px; padding:8px 14px; min-width:160px; }
+.kpi .label { color:var(--muted); font-size:12px; } .kpi .value { font-size:20px; font-weight:600; }
+.num { text-align:right; font-variant-numeric: tabular-nums; }
+.chart { height:280px; margin:8px 0 16px; }

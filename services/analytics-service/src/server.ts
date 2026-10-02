@@ -4,9 +4,17 @@ import { config } from './config';
 import { DatasetCache } from './datasets';
 import { applyOverrides, type RateTable } from './engine/currency';
 import { IngestError, ingest, type Dataset } from './engine/loader';
-import { BadRequest, parseCommon, parseInstant } from './params';
+import { BadRequest, parseCommon, parseInstant, parseRange } from './params';
 import { RateService } from './rates/rateService';
 import { balancesReport, currenciesInUse, transactionsTable } from './reports';
+import {
+  RangeTooLarge,
+  earliestExecuted,
+  parseGranularity,
+  parseGroupBy,
+  summaryReport,
+  timeseriesReport,
+} from './reports/flows';
 
 export interface AppDeps {
   rates?: RateService;
@@ -40,7 +48,7 @@ export function buildApp(deps: AppDeps = {}): FastifyInstance {
   const cache = deps.cache ?? new DatasetCache(config.datasetCacheSize, config.datasetTtlMs);
 
   app.setErrorHandler((err, _req, reply) => {
-    if (err instanceof BadRequest) return fail(reply, 400, 'BAD_REQUEST', err.message);
+    if (err instanceof BadRequest || err instanceof RangeTooLarge) return fail(reply, 400, 'BAD_REQUEST', err.message);
     if (err instanceof IngestError) return fail(reply, 422, err.code, err.message, err.details);
     if ((err as { statusCode?: number }).statusCode === 413)
       return fail(reply, 413, 'BACKUP_TOO_LARGE', 'Backup exceeds the size limit');
@@ -129,8 +137,36 @@ export function buildApp(deps: AppDeps = {}): FastifyInstance {
     ),
   );
 
+  /** from=all means "since the first executed transaction". */
+  const range = (ds: Dataset, q: Record<string, unknown>) => {
+    const tz = q.tz as string;
+    if (q.from === 'all') {
+      const first = earliestExecuted(ds);
+      return parseRange({ ...q, from: first ?? undefined }, tz);
+    }
+    return parseRange(q, tz);
+  };
+
+  app.get<Q>('/datasets/:key/summary', (req, reply) =>
+    withDataset(req.params.key, req.query, reply, (ds, r, q) => {
+      const { from, to } = range(ds, q);
+      return summaryReport(ds, from, to, r);
+    }),
+  );
+
+  app.get<Q>('/datasets/:key/timeseries', (req, reply) =>
+    withDataset(req.params.key, req.query, reply, (ds, r, q) => {
+      const granularity = parseGranularity(q.granularity);
+      if (!granularity) throw new BadRequest('granularity must be DAY, WEEK, MONTH or YEAR');
+      const groupBy = parseGroupBy(q.groupBy);
+      if (!groupBy) throw new BadRequest('groupBy must be none, category or account');
+      const { from, to } = range(ds, q);
+      return timeseriesReport(ds, from, to, granularity, groupBy, q.tz as string, r);
+    }),
+  );
+
   // ---- not yet implemented (plan section 7). Routes exist so the contract is visible end to end. ----
-  for (const name of ['summary', 'timeseries', 'budgets', 'planned', 'tags', 'payees']) {
+  for (const name of ['budgets', 'planned', 'tags', 'payees']) {
     app.get<Q>(`/datasets/:key/${name}`, async (_req, reply) =>
       fail(reply, 501, 'NOT_IMPLEMENTED', `${name} report is not implemented yet`),
     );
