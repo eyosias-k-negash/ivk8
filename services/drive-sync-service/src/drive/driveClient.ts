@@ -102,13 +102,13 @@ export class DriveClient {
     return body.name;
   }
 
-  /** Every backup version in the folder, newest first. */
+  /** Every backup version in the folder, newest first; the caller/UI decides which one to load. */
   async listBackups(folderId: string): Promise<BackupFile[]> {
     const out: BackupFile[] = [];
     let pageToken: string | undefined;
     do {
       const res = await this.request('/files', {
-        q: `'${q(folderId)}' in parents and trashed=false and (mimeType='application/json' or name contains '.json')`,
+        q: `'${q(folderId)}' in parents and trashed=false and (mimeType='application/zip' or mimeType='application/x-zip-compressed' or name contains '.zip')`,
         fields: 'nextPageToken,files(id,name,modifiedTime,size)',
         orderBy: 'modifiedTime desc',
         pageSize: '100',

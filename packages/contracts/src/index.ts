@@ -55,6 +55,7 @@ export interface ApiError {
       | 'FOLDER_NOT_SET'
       | 'NOT_FOUND'
       | 'BACKUP_TOO_LARGE'
+      | 'INVALID_BACKUP_ZIP'
       | 'SCHEMA_INVALID'
       | 'NO_SETTINGS'
       | 'BAD_REQUEST'

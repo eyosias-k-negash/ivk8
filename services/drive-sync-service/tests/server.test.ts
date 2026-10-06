@@ -1,3 +1,4 @@
+import { zipSync } from 'fflate';
 import { describe, it, expect, vi } from 'vitest';
 import { buildApp } from '../src/server';
 import { SESSION_COOKIE, SessionCodec, type Session } from '../src/auth/session';
@@ -18,8 +19,8 @@ function setup() {
   const drive = {
     listFolders: vi.fn(async () => [{ id: 'folder1', name: 'Ivy' }]),
     listBackups: vi.fn(async () => []),
-    meta: vi.fn(async (id: string) => ({ id, name: 'b.json', mimeType: 'application/json', size: 2, md5Checksum: 'm', modifiedTime: '', parents: ['folder1'] })),
-    download: vi.fn(async () => Buffer.from('{}')),
+    meta: vi.fn(async (id: string) => ({ id, name: 'b.zip', mimeType: 'application/zip', size: 2, md5Checksum: 'm', modifiedTime: '', parents: ['folder1'] })),
+    download: vi.fn(async () => Buffer.from(zipSync({ 'backup.json': Buffer.from('{}') }))),
     folderName: vi.fn(async () => 'Ivy'),
   } as unknown as DriveClient;
   const analytics = {

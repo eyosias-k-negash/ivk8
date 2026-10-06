@@ -6,6 +6,7 @@ import { AnalyticsClient } from './analytics/analyticsClient';
 import { GoogleOAuth, ReauthRequired, newState, newVerifier } from './auth/google';
 import { SESSION_COOKIE, SESSION_MAX_AGE_S, SessionCodec, type Session } from './auth/session';
 import type { Config } from './config';
+import { InvalidBackupZip, extractBackupJson } from './drive/backupZip';
 import { BackupTooLarge, DriveClient, DriveNotFound, DriveRateLimited, DriveUnavailable } from './drive/driveClient';
 
 export interface AppDeps {
@@ -106,6 +107,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     if (err instanceof DriveUnavailable) return fail(reply, 503, 'DRIVE_UNAVAILABLE', 'Google Drive is unavailable; try again shortly');
     if (err instanceof DriveNotFound) return fail(reply, 404, 'NOT_FOUND', err.message);
     if (err instanceof BackupTooLarge) return fail(reply, 413, 'BACKUP_TOO_LARGE', err.message);
+    if (err instanceof InvalidBackupZip) return fail(reply, 422, 'INVALID_BACKUP_ZIP', err.message);
     const e = err as Error;
     app.log.error({ err: { message: e.message, stack: e.stack } }, 'unhandled');
     return fail(reply, 500, 'INTERNAL', 'Internal error');
@@ -222,8 +224,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
       let res = await analytics.report(key, report, query);
       if (res.status === 404) {
-        const bytes = await drive.download(meta, config.maxBackupBytes);
-        const ingested = await analytics.ingest(key, bytes);
+        const zipBytes = await drive.download(meta, config.maxBackupBytes);
+        const json = extractBackupJson(zipBytes, meta.name);
+        const ingested = await analytics.ingest(key, json);
         if (ingested.status >= 400) return reply.code(ingested.status).send(ingested.body);
         res = await analytics.report(key, report, query);
       }

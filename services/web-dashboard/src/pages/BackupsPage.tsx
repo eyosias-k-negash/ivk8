@@ -12,7 +12,7 @@ export function BackupsPage({ folderName, onOpen, onChangeFolder }: { folderName
       </div>
       {backups.isLoading && <p className="muted">Loading backups…</p>}
       {backups.error && <ErrorBox error={backups.error} />}
-      {backups.data?.length === 0 && <p className="muted">No .json backups found in this folder.</p>}
+      {backups.data?.length === 0 && <p className="muted">No .zip backups found in this folder.</p>}
       <table className="grid">
         <tbody>
           {backups.data?.map((b, i) => (

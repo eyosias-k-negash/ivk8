@@ -39,8 +39,8 @@ describe('DriveClient', () => {
 
   it('lists backups newest first across pages', async () => {
     const { drive } = client([
-      () => json(200, { nextPageToken: 'n', files: [{ id: 'a', name: 'a.json', modifiedTime: '2026-09-02', size: '5' }] }),
-      () => json(200, { files: [{ id: 'b', name: 'b.json', modifiedTime: '2026-09-01' }] }),
+      () => json(200, { nextPageToken: 'n', files: [{ id: 'a', name: 'IvyWalletBackup-20260902-0001.zip', modifiedTime: '2026-09-02', size: '5' }] }),
+      () => json(200, { files: [{ id: 'b', name: 'IvyWalletBackup-20260901-0001.zip', modifiedTime: '2026-09-01' }] }),
     ]);
     const list = await drive.listBackups('folder');
     expect(list.map((f) => f.fileId)).toEqual(['a', 'b']);
