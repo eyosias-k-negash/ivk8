@@ -1,0 +1,46 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Existing kubeadm cluster (make up-kubeadm).
+#   - CNI: Calico, so every NetworkPolicy in base is actually enforced.
+#   - Ingress: Traefik (Helm) in the `traefik` namespace, NodePort 30080/30443, no LoadBalancer.
+#   - Images are built on the amd64 control-plane node and imported into ITS containerd
+#     (scripts/kubeadm-up.sh), so all Ivy pods are pinned to that node.
+resources:
+  - ../../base
+images:
+  - { name: ivy/analytics-service, newTag: kubeadm }
+  - { name: ivy/drive-sync-service, newTag: kubeadm }
+  - { name: ivy/web-dashboard, newTag: kubeadm }
+patches:
+  - target: { kind: Ingress, name: ivy }
+    patch: |-
+      - op: add
+        path: /spec/ingressClassName
+        value: traefik
+  - target: { kind: Deployment }
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never
+  # Pin to the control-plane node (where the images live) and tolerate its taint.
+  - target: { kind: Deployment }
+    patch: |-
+      - op: add
+        path: /spec/template/spec/nodeSelector
+        value: { kubernetes.io/hostname: hostname }
+      - op: add
+        path: /spec/template/spec/tolerations
+        value:
+          - { key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule }
+  # Traefik runs in its own namespace here, not kube-system as on k3s.
+  - target: { kind: NetworkPolicy, name: allow-from-ingress-controller }
+    patch: |-
+      - op: replace
+        path: /spec/ingress/0/from/0/namespaceSelector/matchLabels
+        value: { kubernetes.io/metadata.name: traefik }
+  # Must match the Google OAuth redirect URI: http://localhost:30080/api/auth/callback
+  - target: { kind: ConfigMap, name: drive-sync-config }
+    patch: |-
+      - op: replace
+        path: /data/PUBLIC_BASE_URL
+        value: http://localhost:30080

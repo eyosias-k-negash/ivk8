@@ -12,7 +12,11 @@ COPY services/web-dashboard services/web-dashboard
 RUN npm run build -w @ivy/web-dashboard
 
 FROM nginxinc/nginx-unprivileged:stable-alpine
+USER root
 COPY services/web-dashboard/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /repo/services/web-dashboard/dist /usr/share/nginx/html
+RUN chmod 644 /etc/nginx/conf.d/default.conf && \
+    find /usr/share/nginx/html -type f -exec chmod 644 {} + && \
+    find /usr/share/nginx/html -type d -exec chmod 755 {} +
 EXPOSE 8080
 USER 101
