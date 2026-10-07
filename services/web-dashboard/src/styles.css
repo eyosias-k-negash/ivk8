@@ -42,3 +42,15 @@ button.link { background:none; border:0; color:var(--accent); cursor:pointer; pa
 .kpi .label { color:var(--muted); font-size:12px; } .kpi .value { font-size:20px; font-weight:600; }
 .num { text-align:right; font-variant-numeric: tabular-nums; }
 .chart { height:280px; margin:8px 0 16px; }
+
+.pick-legend { border:0; padding:0; margin:0 0 16px; min-width:0; }
+.pick-legend > legend { padding:0; margin-bottom:6px; font-size:12px; color:var(--muted); }
+.pick-legend > legend .link { margin-left:8px; font-size:12px; }
+.pick-legend p { margin:0 0 6px; font-size:12px; }
+.pick-legend ul { list-style:none; padding:0; margin:0; display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:2px 16px; font-size:13px; }
+.pick-legend label { display:flex; align-items:center; gap:6px; padding:2px 0; cursor:pointer; }
+.pick-legend label:has(input:disabled) { cursor:default; opacity:.55; }
+.pick-legend input { margin:0; width:14px; height:14px; flex:none; }
+.pick-legend .name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pick-legend .pct { min-width:5ch; text-align:right; font-variant-numeric:tabular-nums; }
+.pick-legend .swatch { width:14px; height:14px; flex:none; border-radius:3px; background:var(--viz-muted); }

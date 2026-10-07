@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { Granularity, GroupBy, SummaryData, TimeseriesData } from '@ivy/contracts';
 import { useReport } from '../api/hooks';
 import { useParams } from '../state/params';
 import { ErrorBox } from './ErrorBox';
-import { fmtMoney, offsetMs } from '../format';
+import { fmtMoney, fmtPct, offsetMs } from '../format';
 
 // ---------- shared date range (flow 4: "for the selected backup and date range") ----------
 
@@ -135,16 +135,47 @@ function Kpi({ label, value }: { label: string; value: string }) {
 
 // ---------- Trends (timeseries) ----------
 
+// The validated palette has 8 hues; a 9th distinct series would need a generated hue, so the
+// cap on picked groups is the palette size and everything unpicked folds into "Other" (muted).
 const SERIES = Array.from({ length: 8 }, (_, i) => `var(--series-${i + 1})`);
-const MAX_GROUPS = 7; // 7 hues + "Other" (muted) keeps the stack inside the validated 8-slot palette
+const DEFAULT_PICKS = 5; // leaves a few colors free for the user's own picks
+
+type Metric = 'expense' | 'income';
+/** Picked group id -> palette slot. Slots stick to the group, so toggling others never repaints it. */
+type Picks = Map<string, number>;
 
 export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange }) {
   const [granularity, setGranularity] = useState<Granularity>('MONTH');
   const [groupBy, setGroupBy] = useState<GroupBy>('none');
-  const [metric, setMetric] = useState<'expense' | 'income'>('expense');
+  const [metric, setMetric] = useState<Metric>('expense');
   const r = useReport<TimeseriesData>(fileId, 'timeseries', { from: range.from, to: range.to, granularity, groupBy });
 
-  const view = useMemo(() => (r.data ? shape(r.data.data, metric) : null), [r.data, metric]);
+  // The user's picks only apply to the split/metric/range they were made for; any change there
+  // falls back to the defaults (top groups by total). Interval changes keep them.
+  const pickKey = `${groupBy}|${metric}|${range.from}|${range.to}`;
+  const [custom, setCustom] = useState<{ key: string; picks: Picks } | null>(null);
+  const groups = useMemo(() => (r.data ? groupTotals(r.data.data, metric) : []), [r.data, metric]);
+  const picks = useMemo(
+    () => (custom?.key === pickKey ? custom.picks : new Map(groups.slice(0, DEFAULT_PICKS).map((g, i) => [g.id, i]))),
+    [custom, pickKey, groups],
+  );
+  const toggle = (id: string) => {
+    const next = new Map(picks);
+    if (next.has(id)) next.delete(id);
+    else {
+      const used = new Set(next.values());
+      const slot = SERIES.findIndex((_, i) => !used.has(i));
+      if (slot < 0) return;
+      next.set(id, slot);
+    }
+    setCustom({ key: pickKey, picks: next });
+  };
+
+  const view = useMemo(() => {
+    if (!r.data) return null;
+    const v = shape(r.data.data, metric, groups, picks);
+    return { ...v, rows: withAverage(v) };
+  }, [r.data, metric, groups, picks]);
 
   return (
     <>
@@ -169,7 +200,7 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
         {groupBy !== 'none' && (
           <label>
             Show{' '}
-            <select value={metric} onChange={(e) => setMetric(e.target.value as 'expense' | 'income')}>
+            <select value={metric} onChange={(e) => setMetric(e.target.value as Metric)}>
               <option value="expense">Expense</option>
               <option value="income">Income</option>
             </select>
@@ -193,10 +224,20 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
                   itemStyle={{ color: 'var(--fg)' }}
                   labelStyle={{ color: 'var(--fg)', fontWeight: 600 }}
                   itemSorter={(item) => -Number(item.value ?? 0)}
-                  formatter={(v) => fmtMoney(Number(v), r.data!.baseCurrency)}
+                  // Stacked bars: each item's share of that period's bar, with the bar total in the header.
+                  labelFormatter={(label, payload) =>
+                    view.stacked && payload?.[0]
+                      ? `${label} · ${fmtMoney(rowTotal(payload[0].payload, view), r.data!.baseCurrency)}`
+                      : label
+                  }
+                  formatter={(v, _name, item) =>
+                    view.stacked
+                      ? `${fmtMoney(Number(v), r.data!.baseCurrency)} (${fmtPct(Number(v), rowTotal(item.payload, view))})`
+                      : fmtMoney(Number(v), r.data!.baseCurrency)
+                  }
                 />
                 {/* Text wears text tokens; the swatch beside it carries identity. */}
-                <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v) => <span style={{ color: 'var(--fg)' }}>{v}</span>} />
+                {!view.stacked && <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v) => <span style={{ color: 'var(--fg)' }}>{v}</span>} />}
                 {view.series.map((s, i) => (
                   <Bar
                     key={s.key}
@@ -208,11 +249,19 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
                     strokeWidth={view.stacked ? 2 : 0}
                     radius={!view.stacked || i === view.series.length - 1 ? [4, 4, 0, 0] : 0}
                     isAnimationActive={false}
-                  />
+                  >
+                    {/* The trailing average bar is dimmed so it reads as a summary, not a period. */}
+                    {view.rows.map((row) => (
+                      <Cell key={row.bucket as string} fillOpacity={row.bucket === AVG_BUCKET ? 0.55 : 1} />
+                    ))}
+                  </Bar>
                 ))}
               </BarChart>
             </ResponsiveContainer>
           </div>
+          {view.stacked && (
+            <PickLegend groups={groups} picks={picks} base={r.data.baseCurrency} onToggle={toggle} onReset={() => setCustom(null)} />
+          )}
           {/* Table view: the accessible/precise counterpart of the chart. */}
           <details>
             <summary>Show as table</summary>
@@ -245,8 +294,27 @@ interface View {
   rows: Record<string, string | number>[];
 }
 
-/** Pivot API points into chart rows. Grouped views keep the top groups and fold the rest into "Other". */
-function shape(d: TimeseriesData, metric: 'expense' | 'income'): View {
+interface Group {
+  id: string;
+  name: string;
+  total: number;
+}
+
+/** Per-group totals over the whole range, largest first. Groups with nothing to show are dropped. */
+function groupTotals(d: TimeseriesData, metric: Metric): Group[] {
+  if (d.groupBy === 'none') return [];
+  const totals = new Map<string, Group>();
+  for (const p of d.points) {
+    const id = p.groupId ?? '?';
+    const g = totals.get(id) ?? { id, name: p.groupName ?? id, total: 0 };
+    g.total += p[metric];
+    totals.set(id, g);
+  }
+  return [...totals.values()].filter((g) => g.total > 0).sort((a, b) => b.total - a.total);
+}
+
+/** Pivot API points into chart rows. Grouped views show the picked groups and fold the rest into "Other". */
+function shape(d: TimeseriesData, metric: Metric, groups: Group[], picks: Picks): View {
   if (d.groupBy === 'none') {
     return {
       title: 'Income and expense',
@@ -259,28 +327,20 @@ function shape(d: TimeseriesData, metric: 'expense' | 'income'): View {
     };
   }
 
-  const totals = new Map<string, { name: string; total: number }>();
-  for (const p of d.points) {
-    const id = p.groupId ?? '?';
-    const t = totals.get(id) ?? { name: p.groupName ?? id, total: 0 };
-    t.total += p[metric];
-    totals.set(id, t);
-  }
-  const top = [...totals.entries()].filter(([, t]) => t.total > 0).sort((a, b) => b[1].total - a[1].total).slice(0, MAX_GROUPS);
-  // Color follows the entity, not its rank: slots are assigned by stable id order among the shown groups.
-  const shown = top.map(([id]) => id).sort();
-  const hasOther = [...totals.entries()].some(([id, t]) => !shown.includes(id) && t.total > 0);
-
   const rowsByBucket = new Map<string, Record<string, string | number>>();
   for (const p of d.points) {
     const row = rowsByBucket.get(p.bucket) ?? { bucket: p.bucket };
-    const key = p.groupId && shown.includes(p.groupId) ? p.groupId : '__other';
+    const id = p.groupId ?? '?';
+    const key = picks.has(id) ? id : '__other';
     row[key] = Number(row[key] ?? 0) + p[metric];
     rowsByBucket.set(p.bucket, row);
   }
 
-  const series = shown.map((id, i) => ({ key: id, label: totals.get(id)!.name, color: SERIES[i]! }));
-  if (hasOther) series.push({ key: '__other', label: 'Other', color: 'var(--viz-muted)' });
+  // Largest picked group sits at the bottom of the stack; "Other" caps it.
+  const series = groups
+    .filter((g) => picks.has(g.id))
+    .map((g) => ({ key: g.id, label: g.name, color: SERIES[picks.get(g.id)!]! }));
+  if (groups.some((g) => !picks.has(g.id))) series.push({ key: '__other', label: 'Other', color: 'var(--viz-muted)' });
 
   return {
     title: metric === 'expense' ? 'Expense' : 'Income',
@@ -288,4 +348,77 @@ function shape(d: TimeseriesData, metric: 'expense' | 'income'): View {
     series,
     rows: [...rowsByBucket.values()].sort((a, b) => String(a.bucket).localeCompare(String(b.bucket))),
   };
+}
+
+const AVG_BUCKET = 'Average';
+
+/** Appends one row holding each shown series' mean over the displayed periods (empty periods count as 0). */
+function withAverage(view: View): View['rows'] {
+  const n = view.rows.length;
+  if (!n) return view.rows;
+  // "Other" is not an enabled legend entry, so it gets no average bar.
+  const avg: Record<string, string | number> = { bucket: AVG_BUCKET };
+  for (const s of view.series) {
+    if (view.stacked && s.key === '__other') continue;
+    avg[s.key] = view.rows.reduce((sum, r) => sum + Number(r[s.key] ?? 0), 0) / n;
+  }
+  return [...view.rows, avg];
+}
+
+/** Sum of all shown series in one chart row, i.e. the full height of that period's stacked bar. */
+function rowTotal(row: Record<string, string | number> | undefined, view: View): number {
+  return row ? view.series.reduce((sum, s) => sum + Number(row[s.key] ?? 0), 0) : 0;
+}
+
+/** Checkbox legend for grouped views: checked groups get their own color, unchecked ones fold into "Other". */
+function PickLegend({ groups, picks, base, onToggle, onReset }: {
+  groups: Group[];
+  picks: Picks;
+  base: string;
+  onToggle: (id: string) => void;
+  onReset: () => void;
+}) {
+  if (!groups.length) return null;
+  const full = picks.size >= SERIES.length;
+  const other = groups.filter((g) => !picks.has(g.id)).reduce((sum, g) => sum + g.total, 0);
+  const whole = groups.reduce((sum, g) => sum + g.total, 0);
+  return (
+    <fieldset className="pick-legend">
+      <legend>
+        Shown in chart ({picks.size}/{SERIES.length}) <button className="link" onClick={onReset}>Reset</button>
+      </legend>
+      {full && <p className="muted">All {SERIES.length} colors are in use. Uncheck one to add another.</p>}
+      <ul>
+        {groups.map((g) => {
+          const slot = picks.get(g.id);
+          return (
+            <li key={g.id}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={slot !== undefined}
+                  disabled={slot === undefined && full}
+                  onChange={() => onToggle(g.id)}
+                  style={slot !== undefined ? { accentColor: SERIES[slot] } : undefined}
+                />
+                <span className="name">{g.name}</span>
+                <span className="num muted">{fmtMoney(g.total, base)}</span>
+                <span className="num pct">{fmtPct(g.total, whole)}</span>
+              </label>
+            </li>
+          );
+        })}
+        {other > 0 && (
+          <li>
+            <label>
+              <span className="swatch" aria-hidden />
+              <span className="name">Other</span>
+              <span className="num muted">{fmtMoney(other, base)}</span>
+              <span className="num pct">{fmtPct(other, whole)}</span>
+            </label>
+          </li>
+        )}
+      </ul>
+    </fieldset>
+  );
 }
