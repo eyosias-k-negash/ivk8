@@ -1,5 +1,5 @@
 # Build context: repository root (workspaces). See Makefile / CI.
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /repo
 COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages/contracts/package.json packages/contracts/
