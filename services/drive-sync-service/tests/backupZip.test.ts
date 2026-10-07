@@ -8,6 +8,22 @@ describe('extractBackupJson', () => {
     expect(extractBackupJson(Buffer.from(zip), 'b.zip').toString()).toBe('{"a":1}');
   });
 
+  it('transcodes a UTF-16BE entry with BOM (what the Ivy app writes) to UTF-8', () => {
+    const be = Buffer.from('﻿{"name":"Café €"}', 'utf16le').swap16();
+    const zip = zipSync({ 'data123.json': be });
+    expect(extractBackupJson(Buffer.from(zip), 'b.zip').toString('utf8')).toBe('{"name":"Café €"}');
+  });
+
+  it('transcodes a UTF-16LE entry with BOM to UTF-8', () => {
+    const zip = zipSync({ 'data123.json': Buffer.from('﻿{"a":"é"}', 'utf16le') });
+    expect(extractBackupJson(Buffer.from(zip), 'b.zip').toString('utf8')).toBe('{"a":"é"}');
+  });
+
+  it('strips a UTF-8 BOM', () => {
+    const zip = zipSync({ 'data123.json': Buffer.from('﻿{"a":1}', 'utf8') });
+    expect(extractBackupJson(Buffer.from(zip), 'b.zip').toString('utf8')).toBe('{"a":1}');
+  });
+
   it('rejects a zip with no json entry', () => {
     const zip = zipSync({ 'notes.txt': Buffer.from('hi') });
     expect(() => extractBackupJson(Buffer.from(zip), 'b.zip')).toThrow(InvalidBackupZip);
