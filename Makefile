@@ -27,7 +27,7 @@ up: ## Create/update local k3d cluster and deploy everything (needs .env)
 down: ## Delete the local k3d cluster
 	bash scripts/k3d-down.sh
 
-up-kubeadm: ## Build, import and deploy to the existing kubeadm cluster (run on the control-plane node; needs .env + sudo)
+up-kubeadm: ## Build, import and deploy to the kubeadm cluster (control-plane node; .env + sudo). CAUSE="..." sets the rollout history message
 	bash scripts/kubeadm-up.sh
 
 down-kubeadm: ## Remove Ivy from the kubeadm cluster (deletes the ivy namespace, incl. the secret)

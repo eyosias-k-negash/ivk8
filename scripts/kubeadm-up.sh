@@ -10,6 +10,11 @@ PIN_NODE="${PIN_NODE:-hostname}"
 TAG=kubeadm
 NAMESPACE=ivy
 SERVICES=(analytics-service drive-sync-service web-dashboard)
+# CHANGE-CAUSE shown by `kubectl rollout history` (make up-kubeadm CAUSE="..."); defaults to the git commit.
+if [[ -z "${CAUSE:-}" ]]; then
+  CAUSE="deploy $(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  git diff --quiet HEAD 2>/dev/null || CAUSE+=" (dirty)"
+fi
 
 die() { echo "error: $*" >&2; exit 1; }
 
@@ -37,6 +42,8 @@ NAMESPACE="$NAMESPACE" bash scripts/create-secrets.sh
 kubectl apply -k k8s/overlays/kubeadm
 
 # Image tag is constant, so force new pods to pick up the freshly imported images.
+# The change-cause annotation is copied onto the ReplicaSet the restart creates.
+kubectl -n "$NAMESPACE" annotate deployment --all --overwrite "kubernetes.io/change-cause=$CAUSE" >/dev/null
 kubectl -n "$NAMESPACE" rollout restart deployment >/dev/null
 for s in "${SERVICES[@]}"; do
   kubectl -n "$NAMESPACE" rollout status "deploy/$s" --timeout=180s
@@ -45,3 +52,4 @@ done
 echo
 echo "Ivy Wallet Plus is up: http://localhost:30080"
 echo "(If localhost:30080 does not answer: kubectl -n traefik port-forward svc/traefik 30080:80)"
+echo "Rollout recorded as: $CAUSE  (kubectl -n $NAMESPACE rollout history deploy/<name>)"
