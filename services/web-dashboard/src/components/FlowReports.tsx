@@ -141,8 +141,11 @@ const SERIES = Array.from({ length: 8 }, (_, i) => `var(--series-${i + 1})`);
 const DEFAULT_PICKS = 5; // leaves a few colors free for the user's own picks
 
 type Metric = 'expense' | 'income';
-/** Picked group id -> palette slot. Slots stick to the group, so toggling others never repaints it. */
-type Picks = Map<string, number>;
+/**
+ * Picked group id -> palette slot (+ name, for picks with no activity in the current range).
+ * Slots stick to the group, so toggling others never repaints it.
+ */
+type Picks = Map<string, { slot: number; name: string }>;
 
 export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange }) {
   const [granularity, setGranularity] = useState<Granularity>('MONTH');
@@ -150,25 +153,27 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
   const [metric, setMetric] = useState<Metric>('expense');
   const r = useReport<TimeseriesData>(fileId, 'timeseries', { from: range.from, to: range.to, granularity, groupBy });
 
-  // The user's picks only apply to the split/metric/range they were made for; any change there
-  // falls back to the defaults (top groups by total). Interval changes keep them.
-  const pickKey = `${groupBy}|${metric}|${range.from}|${range.to}`;
-  const [custom, setCustom] = useState<{ key: string; picks: Picks } | null>(null);
+  // The user's picks belong to the split they were made for: changing "Split by" (or Reset) falls
+  // back to the defaults (top groups by total). Range, metric and interval changes keep them.
+  const [custom, setCustom] = useState<{ groupBy: GroupBy; picks: Picks } | null>(null);
   const groups = useMemo(() => (r.data ? groupTotals(r.data.data, metric) : []), [r.data, metric]);
-  const picks = useMemo(
-    () => (custom?.key === pickKey ? custom.picks : new Map(groups.slice(0, DEFAULT_PICKS).map((g, i) => [g.id, i]))),
-    [custom, pickKey, groups],
+  const picks = useMemo<Picks>(
+    () =>
+      custom?.groupBy === groupBy
+        ? custom.picks
+        : new Map(groups.slice(0, DEFAULT_PICKS).map((g, i) => [g.id, { slot: i, name: g.name }])),
+    [custom, groupBy, groups],
   );
-  const toggle = (id: string) => {
+  const toggle = (g: Group) => {
     const next = new Map(picks);
-    if (next.has(id)) next.delete(id);
+    if (next.has(g.id)) next.delete(g.id);
     else {
-      const used = new Set(next.values());
+      const used = new Set([...next.values()].map((p) => p.slot));
       const slot = SERIES.findIndex((_, i) => !used.has(i));
       if (slot < 0) return;
-      next.set(id, slot);
+      next.set(g.id, { slot, name: g.name });
     }
-    setCustom({ key: pickKey, picks: next });
+    setCustom({ groupBy, picks: next });
   };
 
   const view = useMemo(() => {
@@ -339,7 +344,7 @@ function shape(d: TimeseriesData, metric: Metric, groups: Group[], picks: Picks)
   // Largest picked group sits at the bottom of the stack; "Other" caps it.
   const series = groups
     .filter((g) => picks.has(g.id))
-    .map((g) => ({ key: g.id, label: g.name, color: SERIES[picks.get(g.id)!]! }));
+    .map((g) => ({ key: g.id, label: g.name, color: SERIES[picks.get(g.id)!.slot]! }));
   if (groups.some((g) => !picks.has(g.id))) series.push({ key: '__other', label: 'Other', color: 'var(--viz-muted)' });
 
   return {
@@ -375,10 +380,15 @@ function PickLegend({ groups, picks, base, onToggle, onReset }: {
   groups: Group[];
   picks: Picks;
   base: string;
-  onToggle: (id: string) => void;
+  onToggle: (g: Group) => void;
   onReset: () => void;
 }) {
-  if (!groups.length) return null;
+  // Picks survive range changes, so a picked group may have nothing in this range; keep it listed
+  // (at zero) so it can still be unchecked and its color slot freed.
+  const active = new Set(groups.map((g) => g.id));
+  const idle = [...picks].filter(([id]) => !active.has(id)).map(([id, p]) => ({ id, name: p.name, total: 0 }));
+  const items = [...groups, ...idle];
+  if (!items.length) return null;
   const full = picks.size >= SERIES.length;
   const other = groups.filter((g) => !picks.has(g.id)).reduce((sum, g) => sum + g.total, 0);
   const whole = groups.reduce((sum, g) => sum + g.total, 0);
@@ -389,8 +399,8 @@ function PickLegend({ groups, picks, base, onToggle, onReset }: {
       </legend>
       {full && <p className="muted">All {SERIES.length} colors are in use. Uncheck one to add another.</p>}
       <ul>
-        {groups.map((g) => {
-          const slot = picks.get(g.id);
+        {items.map((g) => {
+          const slot = picks.get(g.id)?.slot;
           return (
             <li key={g.id}>
               <label>
@@ -398,7 +408,7 @@ function PickLegend({ groups, picks, base, onToggle, onReset }: {
                   type="checkbox"
                   checked={slot !== undefined}
                   disabled={slot === undefined && full}
-                  onChange={() => onToggle(g.id)}
+                  onChange={() => onToggle(g)}
                   style={slot !== undefined ? { accentColor: SERIES[slot] } : undefined}
                 />
                 <span className="name">{g.name}</span>
