@@ -6,6 +6,7 @@ import { applyOverrides, type RateTable } from './engine/currency';
 import { IngestError, ingest, type Dataset } from './engine/loader';
 import { BadRequest, parseCommon, parseInstant, parseRange } from './params';
 import { RateService } from './rates/rateService';
+import { budgetTimeseriesReport, budgetsList } from './reports/budgets';
 import { balancesReport, currenciesInUse, transactionsTable } from './reports';
 import {
   RangeTooLarge,
@@ -165,8 +166,24 @@ export function buildApp(deps: AppDeps = {}): FastifyInstance {
     }),
   );
 
+  app.get<Q>('/datasets/:key/budgets', (req, reply) =>
+    withDataset(req.params.key, req.query, reply, (ds) => budgetsList(ds)),
+  );
+
+  app.get<Q>('/datasets/:key/budget-timeseries', (req, reply) =>
+    withDataset(req.params.key, req.query, reply, (ds, r, q) => {
+      const granularity = parseGranularity(q.granularity);
+      if (!granularity) throw new BadRequest('granularity must be DAY, WEEK, MONTH or YEAR');
+      if (typeof q.budgetId !== 'string' || !q.budgetId) throw new BadRequest('budgetId is required');
+      const { from, to } = range(ds, q);
+      const out = budgetTimeseriesReport(ds, q.budgetId, from, to, granularity, q.tz as string, r);
+      if (!out) throw new BadRequest('Unknown budgetId');
+      return out;
+    }),
+  );
+
   // ---- not yet implemented (plan section 7). Routes exist so the contract is visible end to end. ----
-  for (const name of ['budgets', 'planned', 'tags', 'payees']) {
+  for (const name of ['planned', 'tags', 'payees']) {
     app.get<Q>(`/datasets/:key/${name}`, async (_req, reply) =>
       fail(reply, 501, 'NOT_IMPLEMENTED', `${name} report is not implemented yet`),
     );

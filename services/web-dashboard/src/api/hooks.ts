@@ -27,12 +27,13 @@ export function useLogout() {
 export const useBackups = () => useQuery({ queryKey: ['backups'], queryFn: () => api<BackupFile[]>('/backups') });
 
 /** Any analytics report for one backup. Changing tz/overrides changes the key => instant refetch. */
-export function useReport<T>(fileId: string, report: string, extra: Record<string, string | undefined> = {}) {
+export function useReport<T>(fileId: string, report: string, extra: Record<string, string | undefined> = {}, enabled = true) {
   const params = useParams();
   const qs = analyticsQuery(params, extra);
   return useQuery({
     queryKey: ['report', fileId, report, qs],
     queryFn: () => api<AnalyticsEnvelope<T>>(`/backups/${encodeURIComponent(fileId)}/${report}?${qs}`),
     placeholderData: (prev) => prev,
+    enabled,
   });
 }

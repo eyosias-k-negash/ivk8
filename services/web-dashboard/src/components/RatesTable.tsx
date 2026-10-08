@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { RateUsed } from '@ivy/contracts';
 import { useParams } from '../state/params';
 
-/** Editable rates table: shows each rate's source; editing creates a manual override (in memory only). */
+/** Editable rates table: shows each rate's source; editing creates a manual override (remembered per signed-in user in this browser). */
 export function RatesTable({ base, rates }: { base: string; rates: RateUsed[] }) {
   const { rateOverrides, setOverride } = useParams();
   const [draft, setDraft] = useState<Record<string, string>>({});

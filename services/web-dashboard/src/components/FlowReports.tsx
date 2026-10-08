@@ -56,7 +56,7 @@ export function RangePicker({ value, onChange }: { value: DateRange; onChange: (
   );
 }
 
-function Unconverted({ list }: { list: string[] }) {
+export function Unconverted({ list }: { list: string[] }) {
   if (!list.length) return null;
   return (
     <div className="callout warn">
@@ -137,7 +137,7 @@ function Kpi({ label, value }: { label: string; value: string }) {
 
 // The validated palette has 8 hues; a 9th distinct series would need a generated hue, so the
 // cap on picked groups is the palette size and everything unpicked folds into "Other" (muted).
-const SERIES = Array.from({ length: 8 }, (_, i) => `var(--series-${i + 1})`);
+export const SERIES = Array.from({ length: 8 }, (_, i) => `var(--series-${i + 1})`);
 const DEFAULT_PICKS = 5; // leaves a few colors free for the user's own picks
 
 type Metric = 'expense' | 'income';

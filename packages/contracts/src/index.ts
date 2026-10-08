@@ -173,20 +173,34 @@ export interface TimeseriesData {
   unconverted: string[];
 }
 
-export interface BudgetStatus {
+export interface BudgetInfo {
   id: string;
   name: string;
+  /** Allotted amount for one calendar month, in base currency. */
   amount: number;
-  spent: number;
-  remaining: number;
-  /** null until day 8 of the month. */
-  projected: number | null;
-  categoryNames: string[];
+  categories: { id: string; name: string }[];
 }
 
 export interface BudgetsData {
-  month: string;
-  budgets: BudgetStatus[];
+  budgets: BudgetInfo[];
+}
+
+export interface BudgetBucket {
+  bucket: string;
+  /** Budget scaled to this bucket by exact calendar days: each day carries amount / days-in-its-month. */
+  threshold: number;
+  /** Expense per budget category id. Categories with nothing in the bucket are absent. */
+  spent: Record<string, number>;
+}
+
+export interface BudgetTimeseriesData {
+  budget: BudgetInfo;
+  from: number;
+  to: number;
+  granularity: Granularity;
+  /** Every bucket in the range, zeros included. */
+  buckets: BudgetBucket[];
+  unconverted: string[];
 }
 
 export interface PlannedItem {

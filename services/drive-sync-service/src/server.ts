@@ -19,7 +19,7 @@ export interface AppDeps {
 }
 
 /** Reports the dashboard may request; mirrors analytics-service routes. */
-const REPORTS = new Set(['transactions', 'balances', 'summary', 'timeseries', 'budgets', 'planned', 'tags', 'payees', 'rates']);
+const REPORTS = new Set(['transactions', 'balances', 'summary', 'timeseries', 'budgets', 'budget-timeseries', 'planned', 'tags', 'payees', 'rates']);
 const OAUTH_TTL_MS = 10 * 60_000;
 
 declare module 'fastify' {

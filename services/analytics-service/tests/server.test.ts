@@ -66,7 +66,7 @@ describe('analytics API', () => {
   });
 
   it('unimplemented reports answer 501, not 404', async () => {
-    expect((await app().inject(`/datasets/${key}/budgets`)).statusCode).toBe(501);
+    expect((await app().inject(`/datasets/${key}/planned`)).statusCode).toBe(501);
   });
 });
 

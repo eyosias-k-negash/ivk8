@@ -3,6 +3,7 @@
   --surface-1:#fcfcfb; --viz-muted:#898781; --viz-grid:#e3e6ef;
   --series-1:#2a78d6; --series-2:#eb6834; --series-3:#1baf7a; --series-4:#eda100;
   --series-5:#e87ba4; --series-6:#008300; --series-7:#4a3aa7; --series-8:#e34948;
+  --zone-ok:#1baf7a; --zone-over:#e34948;
   --bg:#f6f7fb; --card:#fff; --fg:#1d2330; --muted:#6b7385; --accent:#4f6bed; --warn:#fff6e0; --err:#fdecec; --border:#e3e6ef; color-scheme: light dark; }
 @media (prefers-color-scheme: dark) { :root {
   --surface-1:#1a1a19; --viz-grid:#2b3140;
@@ -48,9 +49,13 @@ button.link { background:none; border:0; color:var(--accent); cursor:pointer; pa
 .pick-legend > legend .link { margin-left:8px; font-size:12px; }
 .pick-legend p { margin:0 0 6px; font-size:12px; }
 .pick-legend ul { list-style:none; padding:0; margin:0; display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:2px 16px; font-size:13px; }
-.pick-legend label { display:flex; align-items:center; gap:6px; padding:2px 0; cursor:pointer; }
+.pick-legend label, .pick-legend .pick-item { display:flex; align-items:center; gap:6px; padding:2px 0; cursor:pointer; }
 .pick-legend label:has(input:disabled) { cursor:default; opacity:.55; }
 .pick-legend input { margin:0; width:14px; height:14px; flex:none; }
 .pick-legend .name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pick-legend .pct { min-width:5ch; text-align:right; font-variant-numeric:tabular-nums; }
 .pick-legend .swatch { width:14px; height:14px; flex:none; border-radius:3px; background:var(--viz-muted); }
+
+.pick-legend .swatch.solid { background:var(--c); }
+.budget-sum { margin:0 0 8px; font-size:13px; color:var(--muted); }
+.pick-legend .pick-item { cursor:default; }

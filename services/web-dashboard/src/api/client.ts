@@ -31,7 +31,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
-/** Query string for analytics calls. tz + overrides travel on every request; nothing is stored. */
+/** Query string for analytics calls. tz + overrides travel on every request; nothing is stored server-side. */
 export function analyticsQuery(params: { tz: string; rateOverrides: Record<string, number> }, extra: Record<string, string | undefined> = {}): string {
   const q = new URLSearchParams({ tz: params.tz });
   if (Object.keys(params.rateOverrides).length) q.set('rateOverrides', JSON.stringify(params.rateOverrides));

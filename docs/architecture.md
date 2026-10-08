@@ -21,7 +21,7 @@ The analytics rules and estimates live in `ANALYTICS-PLAN-LEAN.md` (project doc)
 
 | Service | Owns | State | Public? |
 |---|---|---|---|
-| `web-dashboard` | UI for flows 1–7; timezone + rate overrides held in memory | none | yes (`/`) |
+| `web-dashboard` | UI for flows 1–7; timezone held in memory; rate overrides remembered per user in browser localStorage | none | yes (`/`) |
 | `drive-sync-service` | sign-in, token refresh, folder choice, listing backups, size limit, Drive retries, choosing which bytes to analyse | encrypted cookie only | yes (`/api`) |
 | `analytics-service` | validation, business rules, FX, every number on screen | in-memory LRU of parsed datasets + FX cache | **no** (NetworkPolicy) |
 | `packages/contracts` | shared request/response types | n/a | n/a |
