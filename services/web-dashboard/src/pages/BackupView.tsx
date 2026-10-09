@@ -9,6 +9,7 @@ import { RatesTable } from '../components/RatesTable';
 import { TransactionsTable } from '../components/TransactionsTable';
 import { fmtMoney } from '../format';
 import { BudgetsTab } from '../components/BudgetsTab';
+import { PlannedTab } from '../components/PlannedTab';
 import { RangePicker, SummaryTab, TrendsTab, presetRange, type DateRange } from '../components/FlowReports';
 
 const TABS = ['Transactions', 'Balances', 'Income & expense', 'Trends', 'Budgets', 'Planned', 'Tags', 'Payees', 'Rates & timezone'] as const;
@@ -37,7 +38,7 @@ export function BackupView({ fileId, onBack }: { fileId: string; onBack: () => v
       {tab === 'Income & expense' && <SummaryTab fileId={fileId} range={range} />}
       {tab === 'Trends' && <TrendsTab fileId={fileId} range={range} />}
       {tab === 'Budgets' && <BudgetsTab fileId={fileId} range={range} />}
-      {tab === 'Planned' && <Pending fileId={fileId} report="planned" />}
+      {tab === 'Planned' && <PlannedTab fileId={fileId} />}
       {tab === 'Tags' && (
         <>
           <p className="muted">A transaction with several tags counts once under each tag, so tag totals can exceed the overall total.</p>

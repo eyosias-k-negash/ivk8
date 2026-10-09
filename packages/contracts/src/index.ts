@@ -203,23 +203,28 @@ export interface BudgetTimeseriesData {
   unconverted: string[];
 }
 
-export interface PlannedItem {
-  id: string;
-  title: string | null;
-  type: 'INCOME' | 'EXPENSE' | 'TRANSFER';
-  dueDate: number;
-  state: 'OVERDUE' | 'UPCOMING';
-  accountName: string;
-  categoryName: string | null;
-  amount: number;
-  currency: string;
-  amountBase: number | null;
+export interface PlannedBucket {
+  bucket: string;
+  /** Planned income due in the bucket, per category id (base currency). Absent = nothing. */
+  income: Record<string, number>;
+  /** Planned expense due in the bucket, per category id (base currency). */
+  expense: Record<string, number>;
+  /** Projected net worth at the end of the bucket (clipped to `to`): executed history plus every planned item due by then. */
+  netWorth: number;
 }
 
 export interface PlannedData {
-  overdue: PlannedItem[];
-  upcoming: PlannedItem[];
-  totals: { overdue: number; upcoming: number };
+  from: number;
+  to: number;
+  granularity: Granularity;
+  /** Names for every category id used in the buckets. Uncategorized items use id "uncategorized". */
+  categories: { id: string; name: string }[];
+  /** Net worth at `from`: executed transactions before it, plus planned items already due. */
+  startingNetWorth: number;
+  /** Every bucket in the range, zeros included. */
+  buckets: PlannedBucket[];
+  /** Currencies left out because no rate was available. */
+  unconverted: string[];
 }
 
 export interface TagRow {

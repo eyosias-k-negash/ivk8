@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { CursorValue } from './CursorValue';
 import type { Granularity, GroupBy, SummaryData, TimeseriesData } from '@ivy/contracts';
 import { useReport } from '../api/hooks';
 import { useParams } from '../state/params';
@@ -241,6 +242,7 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
                       : fmtMoney(Number(v), r.data!.baseCurrency)
                   }
                 />
+                <CursorValue base={r.data.baseCurrency} />
                 {/* Text wears text tokens; the swatch beside it carries identity. */}
                 {!view.stacked && <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v) => <span style={{ color: 'var(--fg)' }}>{v}</span>} />}
                 {view.series.map((s, i) => (

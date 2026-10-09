@@ -1,5 +1,6 @@
 import { useId, useMemo, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Customized, ResponsiveContainer, Tooltip, XAxis, YAxis, usePlotArea, useXAxisScale, useYAxisScale } from 'recharts';
+import { CursorValue } from './CursorValue';
 import type { BudgetTimeseriesData, BudgetsData, Granularity } from '@ivy/contracts';
 import { useReport } from '../api/hooks';
 import { ErrorBox } from './ErrorBox';
@@ -202,6 +203,7 @@ export function BudgetsTab({ fileId, range }: { fileId: string; range: DateRange
                 />
                 <Customized component={<Zones rows={view.rows} ceiling={Math.ceil(ceiling * 1.1) || 1} />} />
                 <Tooltip cursor={{ fill: 'var(--viz-grid)', opacity: 0.4 }} content={<BudgetTooltip series={view.series} base={base} />} />
+                <CursorValue base={base} />
                 {view.series.map((s, i) => (
                   <Bar
                     key={s.key}

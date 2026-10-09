@@ -66,3 +66,10 @@ export function monthRange(ms: number, tz: string = DEFAULT_TZ): MonthRange {
     dayOfMonth: d.getUTCDate(),
   };
 }
+
+/** Instant (UTC ms) at which a bucketKey() bucket starts, in the given offset. Inverse of bucketKey. */
+export function bucketStartMs(key: string, granularity: Granularity, tz: string = DEFAULT_TZ): number {
+  const [y, m = 1, d = 1] = key.split('-').map(Number) as [number, number | undefined, number | undefined];
+  const parts = granularity === 'YEAR' ? [y, 0, 1] : granularity === 'MONTH' ? [y, m - 1, 1] : [y, m - 1, d];
+  return Date.UTC(parts[0]!, parts[1]!, parts[2]!) - parseTzOffsetMs(tz);
+}
