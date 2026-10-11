@@ -2,24 +2,25 @@
  * Planned income/expense and projected net worth (Planned tab).
  *
  * Rules applied here:
- * - Bars: PLANNED INCOME and EXPENSE, bucketed by dueDate in [from, to), per category. Transfers are not
- *   income or expense, so they never appear as bars.
+ * - Bars: PLANNED money into or out of net worth, bucketed by dueDate in [from, to): income and expense on accounts
+ *   included in the balance, and transfers to or from an excluded account. A transfer between two included accounts
+ *   is never a bar, whatever the currencies. Each is filed under its category, or an uncategorized transfer under its
+ *   two accounts; up when money comes in, down when it goes out.
  * - Line: net worth at the end of each bucket (clipped to `to`) = every executed transaction plus every
  *   planned one due before that instant, counting only accounts included in the balance. Overdue planned
  *   items are assumed to happen on their due date. A transfer moves money between accounts, so it only
- *   changes net worth when exactly one side counts or the two currencies convert differently.
+ *   changes net worth when exactly one side counts, or by valuation alone when the two currencies convert differently.
  * - Amounts are converted at the current rate; a currency with no rate is skipped and listed in `unconverted`.
  */
 import type { Granularity, PlannedBucket, PlannedData } from '@ivy/contracts';
-import { toBase, type RateTable } from '../engine/currency';
+import type { RateTable } from '../engine/currency';
 import type { Dataset } from '../engine/loader';
 import { classify } from '../engine/rules';
 import { bucketKey, bucketStartMs } from '../engine/time';
-import { accountCurrency } from './index';
+import { flowOf, isInternalTransfer, netWorthDelta } from './index';
 import { bucketKeys } from './flows';
 
 const round = (n: number) => Math.round(n * 100) / 100;
-const UNCATEGORIZED = { id: 'uncategorized', name: 'Uncategorized' };
 
 export function plannedReport(
   ds: Dataset,
@@ -30,14 +31,6 @@ export function plannedReport(
   rates: RateTable,
 ): PlannedData {
   const unconverted = new Set<string>();
-  const baseOf = (accountId: string | null | undefined, amount: number): number | null => {
-    const a = accountId ? ds.accounts.get(accountId) : undefined;
-    if (!a || a.includeInBalance === false) return 0; // not part of net worth
-    const currency = accountCurrency(ds, a.id);
-    const v = toBase(amount, currency, ds.baseCurrency, rates);
-    if (v == null) unconverted.add(currency);
-    return v;
-  };
 
   const keys = bucketKeys(from, to, granularity, tz);
   const buckets = new Map<string, PlannedBucket>(keys.map((k) => [k, { bucket: k, income: {}, expense: {}, netWorth: 0 }]));
@@ -53,29 +46,16 @@ export function plannedReport(
     const planned = status === 'PLANNED';
     const at = (planned ? t.dueDate : t.dateTime) as number;
 
-    // Net worth effect (skipped silently when a currency cannot be converted; it is reported instead).
-    let delta = 0;
-    if (t.type === 'INCOME') delta = baseOf(t.accountId, t.amount) ?? 0;
-    else if (t.type === 'EXPENSE') delta = -(baseOf(t.accountId, t.amount) ?? 0);
-    else {
-      delta = -(baseOf(t.accountId, t.amount) ?? 0);
-      if (t.toAccountId) delta += baseOf(t.toAccountId, t.toAmount ?? t.amount) ?? 0;
-    }
-    if (delta) events.push({ at, delta });
+    // Net worth effect (a currency that cannot be converted counts as 0; it is reported instead).
+    const delta = netWorthDelta(ds, t, rates, unconverted);
+    if (!delta) continue; // only excluded accounts, or money staying within net worth: no line move, no bar
+    events.push({ at, delta });
 
-    if (!planned || t.type === 'TRANSFER' || at < from || at >= to) continue;
-    const currency = accountCurrency(ds, t.accountId);
-    const base = toBase(t.amount, currency, ds.baseCurrency, rates);
-    if (base == null) {
-      unconverted.add(currency);
-      continue;
-    }
-    const cat = t.categoryId
-      ? { id: t.categoryId, name: ds.categories.get(t.categoryId)?.name ?? '(unknown category)' }
-      : UNCATEGORIZED;
-    names.set(cat.id, cat.name);
-    const side = buckets.get(bucketKey(at, granularity, tz))?.[t.type === 'INCOME' ? 'income' : 'expense'];
-    if (side) side[cat.id] = (side[cat.id] ?? 0) + base;
+    if (!planned || at < from || at >= to || isInternalTransfer(ds, t)) continue;
+    const flow = flowOf(ds, t);
+    names.set(flow.id, flow.name);
+    const side = buckets.get(bucketKey(at, granularity, tz))?.[delta > 0 ? 'income' : 'expense'];
+    if (side) side[flow.id] = (side[flow.id] ?? 0) + Math.abs(delta);
   }
 
   // Sweep the time-ordered events once for the running net worth.

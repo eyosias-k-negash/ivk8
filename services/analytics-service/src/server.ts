@@ -4,10 +4,11 @@ import { config } from './config';
 import { DatasetCache } from './datasets';
 import { applyOverrides, type RateTable } from './engine/currency';
 import { IngestError, ingest, type Dataset } from './engine/loader';
-import { BadRequest, parseCommon, parseInstant, parseRange } from './params';
+import { BadRequest, parseCommon, parseInstant, parseLocalInstant, parseRange } from './params';
 import { RateService } from './rates/rateService';
 import { budgetTimeseriesReport, budgetsList } from './reports/budgets';
 import { plannedReport } from './reports/planned';
+import { MAX_WINDOW, parseWindow, projectionReport } from './reports/projection';
 import { balancesReport, currenciesInUse, transactionsTable } from './reports';
 import {
   RangeTooLarge,
@@ -189,6 +190,21 @@ export function buildApp(deps: AppDeps = {}): FastifyInstance {
       if (!granularity) throw new BadRequest('granularity must be DAY, WEEK, MONTH or YEAR');
       const { from, to } = range(ds, q);
       return plannedReport(ds, from, to, granularity, q.tz as string, r);
+    }),
+  );
+
+  /** Projects from `asOf` (default now) to `to` using the average of the `window` complete buckets before it. */
+  app.get<Q>('/datasets/:key/projection', (req, reply) =>
+    withDataset(req.params.key, req.query, reply, (ds, r, q) => {
+      const granularity = parseGranularity(q.granularity);
+      if (!granularity) throw new BadRequest('granularity must be DAY, WEEK, MONTH or YEAR');
+      const window = parseWindow(q.window);
+      if (!window) throw new BadRequest(`window must be a whole number from 1 to ${MAX_WINDOW}`);
+      const asOf = parseInstant(q.asOf, 'asOf', Date.now());
+      const to = parseLocalInstant(q.to, 'to', q.tz as string, true);
+      if (to === undefined) throw new BadRequest('to is required');
+      if (to <= asOf) throw new BadRequest('to must be after asOf');
+      return projectionReport(ds, asOf, to, granularity, window, q.tz as string, r);
     }),
   );
 

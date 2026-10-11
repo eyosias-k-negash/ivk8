@@ -63,7 +63,7 @@ describe('ingest', () => {
     expect(ds.warnings.find((w) => w.code === 'SHELL_BUDGETS')?.count).toBe(1);
   });
 
-  it('warns about transactions with both dueDate and dateTime (treated as planned)', () => {
+  it('warns about transactions with both dueDate and dateTime (treated as executed)', () => {
     const ds = ingest(
       makeBackup({
         transactions: [tx({ accountId: ID.cash, type: 'EXPENSE', amount: 5, dateTime: 1, dueDate: 2 })],
@@ -71,7 +71,7 @@ describe('ingest', () => {
     );
     const w = ds.warnings.find((x) => x.code === 'PLANNED_WITH_DATETIME');
     expect(w?.count).toBe(1);
-    expect(w?.message).toContain('planned');
+    expect(w?.message).toContain('executed');
   });
 
   it('warns about transactions with no dates and about dangling accounts', () => {

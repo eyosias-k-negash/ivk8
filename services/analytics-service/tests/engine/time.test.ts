@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bucketKey, monthRange, parseTzOffsetMs } from '../../src/engine/time';
+import { bucketEndMs, bucketKey, bucketStartMs, monthRange, parseTzOffsetMs } from '../../src/engine/time';
 import { utc } from './fixtures';
 
 describe('parseTzOffsetMs', () => {
@@ -49,5 +49,14 @@ describe('monthRange', () => {
   });
   it('handles February in a leap year', () => {
     expect(monthRange(utc('2028-02-10T00:00:00Z'), 'Z').daysInMonth).toBe(29);
+  });
+});
+
+describe('bucketEndMs', () => {
+  it('is where the next bucket starts, rolling over month and year ends', () => {
+    expect(bucketEndMs('2026-12', 'MONTH', '+03:00')).toBe(bucketStartMs('2027-01', 'MONTH', '+03:00'));
+    expect(bucketEndMs('2026', 'YEAR', 'Z')).toBe(utc('2027-01-01T00:00:00Z'));
+    expect(bucketEndMs('2026-12-28', 'WEEK', 'Z')).toBe(utc('2027-01-04T00:00:00Z'));
+    expect(bucketEndMs('2028-02-28', 'DAY', 'Z')).toBe(utc('2028-02-29T00:00:00Z'));
   });
 });

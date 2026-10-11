@@ -73,3 +73,13 @@ export function bucketStartMs(key: string, granularity: Granularity, tz: string 
   const parts = granularity === 'YEAR' ? [y, 0, 1] : granularity === 'MONTH' ? [y, m - 1, 1] : [y, m - 1, d];
   return Date.UTC(parts[0]!, parts[1]!, parts[2]!) - parseTzOffsetMs(tz);
 }
+
+/** Instant (UTC ms) at which a bucketKey() bucket ends (exclusive), i.e. where the next one starts. */
+export function bucketEndMs(key: string, granularity: Granularity, tz: string = DEFAULT_TZ): number {
+  const [y, m = 1, d = 1] = key.split('-').map(Number) as [number, number | undefined, number | undefined];
+  const parts =
+    granularity === 'YEAR' ? [y + 1, 0, 1]
+    : granularity === 'MONTH' ? [y, m, 1]
+    : [y, m - 1, d + (granularity === 'WEEK' ? 7 : 1)];
+  return Date.UTC(parts[0]!, parts[1]!, parts[2]!) - parseTzOffsetMs(tz);
+}

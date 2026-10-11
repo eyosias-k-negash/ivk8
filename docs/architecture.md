@@ -47,7 +47,7 @@ Public (drive-sync), all under `/api`:
 | `GET /me` | signed-in state, email, chosen folder |
 | `GET /drive/folders?q=` · `PUT /drive/folder` | find and choose the backups folder |
 | `GET /backups` | backup versions in the folder, newest first |
-| `GET /backups/:fileId/{transactions,balances,summary,timeseries,budgets,planned,tags,payees,rates}` | reports (proxied) |
+| `GET /backups/:fileId/{transactions,balances,summary,timeseries,budgets,planned,projection,tags,payees,rates}` | reports (proxied) |
 
 Internal (analytics): `PUT /datasets/:key`, `HEAD /datasets/:key`, `GET /datasets/:key/<report>`, `/healthz`, `/readyz`.
 

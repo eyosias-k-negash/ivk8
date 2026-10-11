@@ -242,7 +242,6 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
                       : fmtMoney(Number(v), r.data!.baseCurrency)
                   }
                 />
-                <CursorValue base={r.data.baseCurrency} />
                 {/* Text wears text tokens; the swatch beside it carries identity. */}
                 {!view.stacked && <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v) => <span style={{ color: 'var(--fg)' }}>{v}</span>} />}
                 {view.series.map((s, i) => (
@@ -263,6 +262,7 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
                     ))}
                   </Bar>
                 ))}
+                <CursorValue base={r.data.baseCurrency} />
               </BarChart>
             </ResponsiveContainer>
           </div>

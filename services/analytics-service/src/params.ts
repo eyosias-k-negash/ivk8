@@ -52,6 +52,21 @@ export function parseInstant(v: unknown, name: string, fallback?: number): numbe
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /**
+ * Epoch ms, ISO instant, or YYYY-MM-DD read in `tz`: 00:00 local that day, or the next day's 00:00 with
+ * `endOfDay` (so the whole day is included in an exclusive range end). Undefined when absent.
+ */
+export function parseLocalInstant(v: unknown, name: string, tz: string, endOfDay: boolean): number | undefined {
+  if (v == null || v === '') return undefined;
+  const m = DATE_ONLY.exec(String(v));
+  if (m) {
+    const startUtc = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + (endOfDay ? 1 : 0));
+    if (!Number.isFinite(startUtc)) throw new BadRequest(`${name} is not a valid date`);
+    return startUtc - parseTzOffsetMs(tz);
+  }
+  return parseInstant(v, name);
+}
+
+/**
  * Date-range params for summary/timeseries, interpreted in the request timezone.
  * - `from`: epoch ms, ISO instant, or YYYY-MM-DD (= 00:00 local that day). Inclusive.
  * - `to`:   epoch ms, ISO instant, or YYYY-MM-DD (= the whole local day is included). Exclusive instant.
@@ -62,19 +77,8 @@ export function parseRange(
   tz: string,
   nowMs: number = Date.now(),
 ): { from: number; to: number } {
-  const off = parseTzOffsetMs(tz);
-  const local = (v: unknown, name: string, endOfDay: boolean): number | undefined => {
-    if (v == null || v === '') return undefined;
-    const m = DATE_ONLY.exec(String(v));
-    if (m) {
-      const startUtc = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + (endOfDay ? 1 : 0));
-      if (!Number.isFinite(startUtc)) throw new BadRequest(`${name} is not a valid date`);
-      return startUtc - off;
-    }
-    return parseInstant(v, name);
-  };
-  const from = local(q.from, 'from', false) ?? monthRange(nowMs, tz).startMs;
-  const to = local(q.to, 'to', true) ?? nowMs;
+  const from = parseLocalInstant(q.from, 'from', tz, false) ?? monthRange(nowMs, tz).startMs;
+  const to = parseLocalInstant(q.to, 'to', tz, true) ?? nowMs;
   if (from >= to) throw new BadRequest('from must be before to');
   return { from, to };
 }

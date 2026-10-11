@@ -205,9 +205,13 @@ export interface BudgetTimeseriesData {
 
 export interface PlannedBucket {
   bucket: string;
-  /** Planned income due in the bucket, per category id (base currency). Absent = nothing. */
+  /**
+   * Planned money into net worth due in the bucket (base currency): income on accounts included in the balance, and
+   * transfers from excluded accounts. Keyed by category id, or "transfer:<from>><to>" for an uncategorized transfer.
+   * Absent = nothing.
+   */
   income: Record<string, number>;
-  /** Planned expense due in the bucket, per category id (base currency). */
+  /** Planned money out of net worth due in the bucket; same ids as `income`. */
   expense: Record<string, number>;
   /** Projected net worth at the end of the bucket (clipped to `to`): executed history plus every planned item due by then. */
   netWorth: number;
@@ -217,12 +221,61 @@ export interface PlannedData {
   from: number;
   to: number;
   granularity: Granularity;
-  /** Names for every category id used in the buckets. Uncategorized items use id "uncategorized". */
+  /** Names for every id used in the buckets. Uncategorized items use id "uncategorized". */
   categories: { id: string; name: string }[];
   /** Net worth at `from`: executed transactions before it, plus planned items already due. */
   startingNetWorth: number;
   /** Every bucket in the range, zeros included. */
   buckets: PlannedBucket[];
+  /** Currencies left out because no rate was available. */
+  unconverted: string[];
+}
+
+export interface ProjectionBucket {
+  bucket: string;
+  /** actual: a complete past bucket the average is taken over; current: holds `asOf`; projected: wholly after it. */
+  phase: 'actual' | 'current' | 'projected';
+  /**
+   * Executed money into net worth in the bucket (clipped to `to`), whatever its date relative to `asOf`, per flow id
+   * (base currency). Flow ids are category ids (transfers to or from an excluded account included), "uncategorized",
+   * or "transfer:<from>><to>" for an uncategorized one. Transfers between two included accounts never appear.
+   */
+  income: Record<string, number>;
+  /** Executed money out of net worth in the bucket (clipped to `to`), per flow id; same ids as `income`. */
+  expense: Record<string, number>;
+  /**
+   * What each inflow still lacks to reach its average, never negative; shrunk by time when `to` cuts short the part
+   * of the bucket after `asOf`. Empty for actual buckets.
+   */
+  projectedIncome: Record<string, number>;
+  /** Same as `projectedIncome`, for outflows. */
+  projectedExpense: Record<string, number>;
+  /**
+   * Net worth at the end of the bucket (clipped to `to`): executed transactions, plus the top-ups from `asOf` on.
+   * Valued like the Balances tab, so a transfer between included accounts in different currencies can move it.
+   */
+  netWorth: number;
+}
+
+export interface ProjectionData {
+  /** The instant the projection starts from. */
+  asOf: number;
+  to: number;
+  granularity: Granularity;
+  /** Complete buckets before the current one that the average is asked to cover. */
+  window: number;
+  /** How many of those have any history; fewer than `window` when the data is younger. 0 = nothing to average. */
+  windowUsed: number;
+  /** Names for every flow id used below (categories and transfers). */
+  categories: { id: string; name: string }[];
+  /** Mean money in per bucket over the used window, per flow id (base currency). */
+  averageIncome: Record<string, number>;
+  /** Mean money out per bucket over the used window, per flow id (base currency). */
+  averageExpense: Record<string, number>;
+  /** Net worth at `asOf`: executed transactions up to then. Later-dated ones count in their own bucket. */
+  currentNetWorth: number;
+  /** The used window's buckets, then the current one, then every bucket up to `to`. */
+  buckets: ProjectionBucket[];
   /** Currencies left out because no rate was available. */
   unconverted: string[];
 }

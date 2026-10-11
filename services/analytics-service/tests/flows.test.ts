@@ -18,8 +18,8 @@ const ds = ingest(
       tx({ accountId: ID.cash, type: 'EXPENSE', amount: 50, dateTime: utc('2026-09-12T09:00:00Z') }), // uncategorized
       // transfer: neither income nor expense
       tx({ accountId: ID.cash, type: 'TRANSFER', amount: 400, toAccountId: ID.usd, toAmount: 4, dateTime: utc('2026-09-15T09:00:00Z') }),
-      // planned (due date set, even with dateTime): excluded
-      tx({ accountId: ID.cash, type: 'EXPENSE', amount: 999, dueDate: utc('2026-09-20T09:00:00Z'), dateTime: utc('2026-09-20T09:00:00Z') }),
+      // planned (due date, not executed): excluded
+      tx({ accountId: ID.cash, type: 'EXPENSE', amount: 999, dueDate: utc('2026-09-20T09:00:00Z') }),
       // 22:30 UTC on Sep 30 = 01:30 Oct 1 at +03:00 -> October, not September
       tx({ accountId: ID.cash, type: 'EXPENSE', amount: 70, categoryId: ID.food, dateTime: utc('2026-09-30T22:30:00Z') }),
       // loan-linked transaction counts normally (loanId is ignored by the engine)

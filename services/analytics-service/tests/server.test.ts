@@ -87,3 +87,18 @@ describe('summary + timeseries routes', () => {
     expect((await a.inject(`/datasets/${key}/summary?from=2026-09-10&to=2026-09-01`)).statusCode).toBe(400);
   });
 });
+
+describe('projection route', () => {
+  it('projects from asOf to the end of the `to` day and validates params', async () => {
+    const a = app();
+    await a.inject({ method: 'PUT', url: `/datasets/${key}`, payload: backup });
+    const asOf = utc('2026-10-11T12:00:00Z');
+    const res = (await a.inject(`/datasets/${key}/projection?asOf=${asOf}&to=2026-11-30&granularity=month&window=2`)).json();
+    expect(res.data).toMatchObject({ window: 2, windowUsed: 1, currentNetWorth: 1000, averageIncome: { uncategorized: 1000 } });
+    expect(res.data.buckets.map((b: { bucket: string }) => b.bucket)).toEqual(['2026-09', '2026-10', '2026-11']);
+
+    expect((await a.inject(`/datasets/${key}/projection?asOf=${asOf}`)).statusCode).toBe(400); // to is required
+    expect((await a.inject(`/datasets/${key}/projection?asOf=${asOf}&to=2026-10-01`)).statusCode).toBe(400); // to before asOf
+    expect((await a.inject(`/datasets/${key}/projection?asOf=${asOf}&to=2026-11-30&window=0`)).statusCode).toBe(400);
+  });
+});

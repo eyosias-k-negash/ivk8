@@ -4,18 +4,18 @@ import { ID, tx } from './fixtures';
 
 const base = { accountId: ID.cash, type: 'EXPENSE' as const, amount: 10 };
 
-describe('classify (Day 0: dueDate = planned, dateTime = executed)', () => {
+describe('classify (dueDate = planned, dateTime = executed)', () => {
   it('dateTime only -> EXECUTED', () => {
     expect(classify(tx({ ...base, dateTime: 1 }))).toBe('EXECUTED');
   });
   it('dueDate only -> PLANNED', () => {
     expect(classify(tx({ ...base, dueDate: 1 }))).toBe('PLANNED');
   });
-  it('both set -> PLANNED by default', () => {
-    expect(classify(tx({ ...base, dateTime: 1, dueDate: 2 }))).toBe('PLANNED');
+  it('both set -> EXECUTED by default: an executed transaction counts whatever its planned date', () => {
+    expect(classify(tx({ ...base, dateTime: 1, dueDate: 2 }))).toBe('EXECUTED');
   });
-  it('both set -> EXECUTED when plannedWins=false', () => {
-    expect(classify(tx({ ...base, dateTime: 1, dueDate: 2 }), { plannedWins: false })).toBe('EXECUTED');
+  it('both set -> PLANNED when plannedWins=true', () => {
+    expect(classify(tx({ ...base, dateTime: 1, dueDate: 2 }), { plannedWins: true })).toBe('PLANNED');
   });
   it('neither -> INVALID', () => {
     expect(classify(tx(base))).toBe('INVALID');

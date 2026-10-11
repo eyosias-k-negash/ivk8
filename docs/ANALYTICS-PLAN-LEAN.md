@@ -59,7 +59,7 @@ backup.json -> validate (ajv vs schema-new.json) -> index (Maps) -> pure functio
 | 7 | Loan entities fully ignored (same as 4). |
 | 8 | Missing `tags` / `tagAssociations` = empty. |
 | 9 | A budget with an **empty category list is a shell budget: ignored** (not "all categories"). Counted in a warning, excluded from budget output. |
-| 10 | `dueDate` = when planned for; `dateTime` = when executed. A transaction with **both** is treated as **planned** (confirmed). This lives in one flag (`plannedWins` in `rules.ts`) and is surfaced as a warning count so it is easy to revisit. |
+| 10 | `dueDate` = when planned for; `dateTime` = when executed. A transaction with **both** is treated as **executed** (revised 2026-10-11: an executed transaction counts whatever its planned date). This lives in one flag (`plannedWins` in `rules.ts`) and is surfaced as a warning count. |
 
 Implementation remark: there is no `settings` row guaranteed to exist, so if `settings` is empty, fail ingest with a clear error about the missing base currency. If there are several, use the first and warn.
 
@@ -82,8 +82,8 @@ Implementation remark: there is no `settings` row guaranteed to exist, so if `se
 Global rules, applied everywhere:
 
 1. **Skip** any entity with `isDeleted === true`; missing flags are `false`. Missing `includeInBalance` is `true`.
-2. **Executed transaction:** `dueDate == null && dateTime != null`.
-3. **Planned transaction:** `dueDate != null` (regardless of `dateTime`). Status: `OVERDUE` if `dueDate < now`, otherwise `UPCOMING`. Planned transactions are **excluded** from balances, income/expense, budgets, and timeseries.
+2. **Executed transaction:** `dateTime != null`, whatever its `dueDate` (decision 10).
+3. **Planned transaction:** `dueDate != null && dateTime == null`. Status: `OVERDUE` if `dueDate < now`, otherwise `UPCOMING`. Planned transactions are **excluded** from balances, income/expense, budgets, and timeseries.
 4. **Integrity warning** (excluded, not fatal): `dueDate == null && dateTime == null`.
 5. **Currency:** a transaction's currency is its source account's currency (`account.currency`, falling back to base if null). All reported totals are converted to base; native amounts are retained in per-account output.
 6. **Time bucketing:** convert `dateTime` (epoch ms) using the request's timezone (default `+03:00`) before assigning day/week/month/year. Week start: Monday.
@@ -183,7 +183,7 @@ Loans and loan records, Redis/DB/pre-aggregates, historical per-date FX, intrada
 
 - **Golden-file tests** on a sanitized real backup: balances and monthly totals must match the Ivy app (using the same base currency).
 - **Timezone tests:** a transaction at 22:30 UTC on the last day of a month falls in the next month at `+03:00`. This is the most likely boundary bug.
-- **Planned tests:** dueDate in the past (overdue) and future (upcoming) both excluded from balances; `dueDate` set with `dateTime` set is still planned.
+- **Planned tests:** dueDate in the past (overdue) and future (upcoming) both excluded from balances; `dueDate` set with `dateTime` set is executed (decision 10).
 - **FX tests:** mocked fetch success, failure with cache (stale flag), failure without cache (unavailable), override beats live.
 - Unit tests for the comma-separated id parser (whitespace, empty string, null).
 
@@ -200,5 +200,5 @@ Loans and loan records, Redis/DB/pre-aggregates, historical per-date FX, intrada
 |------|-----------|
 | A currency in use is not covered by the ECB (confirmed for ETB) | Choose a fallback provider in the sanity step; until then, manual overrides |
 | Historical income/expense converted at today's rate | Documented approximation; per-date rates are a later enhancement |
-| Transactions with both `dateTime` and `dueDate` | Treated as planned (decision 10); count surfaced as `PLANNED_WITH_DATETIME`. If golden tests disagree with the app, flip `plannedWins` |
+| Transactions with both `dateTime` and `dueDate` | Treated as executed (decision 10); count surfaced as `PLANNED_WITH_DATETIME`. `plannedWins` flips it back if ever needed |
 | Schema validation stricter than real backups (e.g. `format: uuid` on optional ids) | The 1h sanity check on a real backup will show this; relax the validator if needed |

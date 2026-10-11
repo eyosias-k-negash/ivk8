@@ -203,7 +203,6 @@ export function BudgetsTab({ fileId, range }: { fileId: string; range: DateRange
                 />
                 <Customized component={<Zones rows={view.rows} ceiling={Math.ceil(ceiling * 1.1) || 1} />} />
                 <Tooltip cursor={{ fill: 'var(--viz-grid)', opacity: 0.4 }} content={<BudgetTooltip series={view.series} base={base} />} />
-                <CursorValue base={base} />
                 {view.series.map((s, i) => (
                   <Bar
                     key={s.key}
@@ -222,6 +221,7 @@ export function BudgetsTab({ fileId, range }: { fileId: string; range: DateRange
                     ))}
                   </Bar>
                 ))}
+                <CursorValue base={base} />
               </BarChart>
             </ResponsiveContainer>
           </div>

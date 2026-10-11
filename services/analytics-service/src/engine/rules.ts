@@ -3,11 +3,10 @@ import type { Budget, Transaction } from './types';
 /**
  * Day 0 decisions live here so each rule has exactly one home.
  *
- * - dueDate != null  -> transaction is PLANNED (not executed), regardless of dateTime.
+ * - dateTime != null -> EXECUTED, whatever its dueDate: money that moved always counts.
  *   (dueDate = when it was planned for; dateTime = when it was executed.)
- *   `plannedWins` exists so this can be flipped in one place if real data
- *   shows transactions carrying both fields are actually executed.
- * - dueDate == null && dateTime != null -> EXECUTED.
+ * - dueDate != null && dateTime == null -> PLANNED (not executed).
+ *   `plannedWins` flips the both-set case back to PLANNED in one place if ever needed.
  * - neither -> INVALID (excluded, surfaced as a warning).
  * - loanId / loanRecordId are ignored: those transactions are normal.
  */
@@ -15,7 +14,7 @@ export interface RuleConfig {
   plannedWins: boolean;
 }
 
-export const DEFAULT_RULES: RuleConfig = { plannedWins: true };
+export const DEFAULT_RULES: RuleConfig = { plannedWins: false };
 
 export type TxStatus = 'DELETED' | 'EXECUTED' | 'PLANNED' | 'INVALID';
 

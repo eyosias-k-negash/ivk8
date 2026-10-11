@@ -57,7 +57,7 @@ For this loop, also add `http://localhost:5173/api/auth/callback` as a redirect 
 - Totals are in the backup's base currency. Each transaction uses its account's currency. Per-account views also show native amounts.
 - Exchange rates are the latest ECB daily rates, with an optional fallback provider. Manual overrides win. Failed refreshes serve the last rates marked **stale**. Currencies without a rate are reported, never silently dropped.
 - Default timezone is **GMT+3**. Weeks start on Monday.
-- A transaction with a `dueDate` is **planned** (overdue or upcoming) even if it also has a `dateTime`. Planned items never count toward balances, totals, budgets or trends.
+- A transaction with a `dateTime` is **executed** and always counts, even if it also has a `dueDate`. One with only a `dueDate` is **planned** (overdue or upcoming); planned items never count toward balances, totals, budgets or trends.
 - Transfers are not income or expense. Deleted items are ignored. Accounts excluded from balance don't count toward net worth. Loan records are ignored, but loan-linked transactions count normally.
 - Budgets run per calendar month across all accounts and count expenses in their categories only. Budgets with no categories are ignored and produce a warning. The projection appears after day 7.
 - A transaction with several tags counts once per tag, so tag totals can exceed the overall total.

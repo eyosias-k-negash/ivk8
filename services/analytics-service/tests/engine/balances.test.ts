@@ -41,17 +41,17 @@ describe('computeBalances', () => {
     expect(computeBalances(ds, ASOF).balances.get(ID.excluded)).toBeCloseTo(40);
   });
 
-  it('planned transactions never count, even overdue or with dateTime', () => {
+  it('planned transactions never count, even overdue; one with a dateTime was executed and does', () => {
     const ds = ingest(
       makeBackup({
         transactions: [
           tx({ accountId: ID.cash, type: 'EXPENSE', amount: 100, dueDate: utc('2026-01-01T00:00:00Z') }), // overdue
           tx({ accountId: ID.cash, type: 'EXPENSE', amount: 100, dueDate: utc('2027-01-01T00:00:00Z') }), // future
-          tx({ accountId: ID.cash, type: 'EXPENSE', amount: 100, dueDate: T, dateTime: T }), // both
+          tx({ accountId: ID.cash, type: 'EXPENSE', amount: 100, dueDate: utc('2027-01-01T00:00:00Z'), dateTime: T }), // both: executed
         ],
       }),
     );
-    expect(computeBalances(ds, ASOF).balances.get(ID.cash)).toBe(0);
+    expect(computeBalances(ds, ASOF).balances.get(ID.cash)).toBe(-100);
   });
 
   it('respects asOf and deleted flags', () => {
