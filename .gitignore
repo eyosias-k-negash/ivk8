@@ -20,3 +20,7 @@ backups/
 .idea/
 .vscode/
 .claude/settings.json
+
+# blog notes, transcript archive and capture skill (private; posts are published from the website repo)
+blog/
+.claude/skills/blog-capture/

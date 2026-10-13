@@ -58,8 +58,8 @@ For this loop, also add `http://localhost:5173/api/auth/callback` as a redirect 
 - Exchange rates are the latest ECB daily rates, with an optional fallback provider. Manual overrides win. Failed refreshes serve the last rates marked **stale**. Currencies without a rate are reported, never silently dropped.
 - Default timezone is **GMT+3**. Weeks start on Monday.
 - A transaction with a `dateTime` is **executed** and always counts, even if it also has a `dueDate`. One with only a `dueDate` is **planned** (overdue or upcoming); planned items never count toward balances, totals, budgets or trends.
-- Transfers are not income or expense. Deleted items are ignored. Accounts excluded from balance don't count toward net worth. Loan records are ignored, but loan-linked transactions count normally.
-- Budgets run per calendar month across all accounts and count expenses in their categories only. Budgets with no categories are ignored and produce a warning. The projection appears after day 7.
+- Accounts excluded from balance don't count toward net worth, and their own income and expense never count anywhere. A transfer to or from one counts as expense or income on the included side, under its category. A transfer between two included accounts is never income or expense. Deleted items are ignored. Loan records are ignored, but loan-linked transactions count normally.
+- Budgets run per calendar month and count money out in their categories only. Budgets with no categories are ignored and produce a warning. The projection appears after day 7.
 - A transaction with several tags counts once per tag, so tag totals can exceed the overall total.
 
 ## Repository layout

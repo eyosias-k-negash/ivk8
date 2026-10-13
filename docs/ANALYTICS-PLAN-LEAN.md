@@ -60,6 +60,7 @@ backup.json -> validate (ajv vs schema-new.json) -> index (Maps) -> pure functio
 | 8 | Missing `tags` / `tagAssociations` = empty. |
 | 9 | A budget with an **empty category list is a shell budget: ignored** (not "all categories"). Counted in a warning, excluded from budget output. |
 | 10 | `dueDate` = when planned for; `dateTime` = when executed. A transaction with **both** is treated as **executed** (revised 2026-10-11: an executed transaction counts whatever its planned date). This lives in one flag (`plannedWins` in `rules.ts`) and is surfaced as a warning count. |
+| 11 | **Money in/out** (2026-10-12), one rule for every tab (`moneyFlow` in `reports/index.ts`): income and expense on an account **excluded from the balance never count**. A transfer **to or from an excluded account counts** as expense when money leaves an included account and income when it arrives, under its category (or its two accounts when it has none). A transfer **between two included accounts never counts**, whatever the currencies. |
 
 Implementation remark: there is no `settings` row guaranteed to exist, so if `settings` is empty, fail ingest with a clear error about the missing base currency. If there are several, use the first and warn.
 
@@ -106,12 +107,12 @@ for (const t of txs) {
 //   convert(bal[account], account.currency -> base)
 ```
 
-- **Income/expense summary:** executed INCOME and EXPENSE only, converted to base. TRANSFER is excluded from both. Loan-linked transactions are included.
+- **Income/expense summary:** executed money in/out (decision 11), converted to base. Loan-linked transactions are included.
 - **Budget (Tier 1):**
   - `categoryIds = categoryIdsSerialized?.split(',').map(trim).filter(Boolean) ?? []`; `accountIdsSerialized` ignored.
   - Period = calendar month containing the requested date, computed in the request's timezone, from the 1st 00:00 to the next month's 1st 00:00.
   - A budget with an empty `categoryIds` list is a **shell budget and is ignored** (decision 9). It is dropped at ingest and reported via a `SHELL_BUDGETS` warning.
-  - `spent = Σ convert(amount)` over executed EXPENSE transactions in the period whose `categoryId` is in `categoryIds`, across all accounts.
+  - `spent = Σ convert(amount)` over executed money out (decision 11) in the period whose `categoryId` is in `categoryIds`.
   - `budget.amount` is assumed to be in base currency (the schema has no budget currency).
   - Projection: `spent / daysElapsed * daysInMonth`, shown only after day 7 of the month.
 - **Planned view (Tier 1):** list planned transactions with status, due date, converted amount, and totals for overdue and upcoming.

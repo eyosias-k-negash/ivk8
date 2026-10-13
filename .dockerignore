@@ -9,3 +9,5 @@ k8s
 docs
 scripts
 *.md
+blog
+.claude
