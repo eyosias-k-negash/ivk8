@@ -287,17 +287,45 @@ export interface ProjectionData {
   unconverted: string[];
 }
 
-export interface TagRow {
-  tag: string;
+export interface TagTotal {
+  id: string;
+  name: string;
+  /**
+   * Executed money into / out of net worth in the range carrying this tag (base currency). A transaction with several
+   * tags counts under each, so these can add up to more than the money moved.
+   */
   income: number;
   expense: number;
+}
+
+export interface TagSetAmount {
+  /** The exact set of tag ids the transactions carry, sorted. */
+  tagIds: string[];
+  amount: number;
   count: number;
 }
 
+export interface TagBucket {
+  bucket: string;
+  /**
+   * Tagged money into net worth in the bucket, one entry per distinct tag set; each transaction is in exactly one, so
+   * a view combining several tags can count it once. Same rules as every income view (see SummaryData.count).
+   */
+  income: TagSetAmount[];
+  /** Tagged money out of net worth in the bucket, grouped the same way. */
+  expense: TagSetAmount[];
+}
+
 export interface TagsData {
-  /** Always true: multi-tagged transactions count under each tag. */
-  overlapping: true;
-  tags: TagRow[];
+  from: number;
+  to: number;
+  granularity: Granularity;
+  /** Every live tag, largest first (income + expense), zeros included. */
+  tags: TagTotal[];
+  /** Every bucket in the range, empty ones included. */
+  buckets: TagBucket[];
+  /** Currencies left out because no rate was available. */
+  unconverted: string[];
 }
 
 export interface PayeeRow {

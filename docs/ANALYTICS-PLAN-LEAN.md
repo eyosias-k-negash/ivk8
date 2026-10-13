@@ -28,7 +28,8 @@ Code lives in `services/analytics-service/` (monorepo rescaffold, see ARCHITECTU
 | API wiring (Fastify), param parsing, error envelope | done, tested |
 | Reports: transactions table, balances / net worth | done |
 | Reports: summary + timeseries (by category / account, day/week/month/year, gap-filled, tz-aware) + dashboard views | done, tested (2026-10-02) |
-| Reports: budgets, planned, tags, payees (Tier 1) | routes return `501`; next |
+| Reports: budgets, planned, projection, tags (Tier 1) | done, tested (tags 2026-10-13) |
+| Reports: payees (Tier 1) | route returns `501`; next |
 | Sanity check + golden test on a real backup | not started |
 
 69 analytics tests pass, typecheck clean. Roughly 29 to 32 of the Tier 0 hours are spent; Tier 0 code is complete except the real-backup sanity check and golden test.
@@ -116,7 +117,7 @@ for (const t of txs) {
   - `budget.amount` is assumed to be in base currency (the schema has no budget currency).
   - Projection: `spent / daysElapsed * daysInMonth`, shown only after day 7 of the month.
 - **Planned view (Tier 1):** list planned transactions with status, due date, converted amount, and totals for overdue and upcoming.
-- **Tags (Tier 1):** join via `tagAssociations` where `associatedId` is a transaction id; skip deleted associations; a transaction with several tags counts once per tag in the tag breakdown (so tag totals can exceed the overall total; note this in the response).
+- **Tags (Tier 1):** join via `tagAssociations` where `associatedId` is a transaction id; skip deleted associations and associations to deleted tags; a repeated tag/transaction pair counts once. Money counts by decision 11, like every income and expense view. Each tag's own total counts every transaction carrying it (so tag totals can exceed the overall total). The timeseries keeps each transaction's exact tag set per bucket, so a view combining several tags counts a transaction carrying more than one of them once (the dashboard stacks it in a segment for that combination of selected tags).
 - **Anomalies (Tier 2):** per category, flag executed EXPENSE transactions above `Q3 + 1.5*IQR` (base currency), requiring at least 10 transactions in the category.
 
 ## 6. API (analytics-service, cluster-internal)
@@ -134,7 +135,8 @@ Only drive-sync calls these; the browser reaches the same reports as `/api/backu
 | `GET /datasets/:key/timeseries?from=&to=&granularity=&groupBy=` | Bucketed income/expense, optional category/account split |
 | `GET /datasets/:key/budgets?date=` *(Tier 1)* | Budget status list |
 | `GET /datasets/:key/planned` *(Tier 1)* | Overdue and upcoming planned transactions |
-| `GET /datasets/:key/tags`, `/payees` *(Tier 1)* | Tag breakdown, top payees |
+| `GET /datasets/:key/tags?from=&to=&granularity=` *(Tier 1)* | Per-tag totals, plus bucketed money per exact tag set |
+| `GET /datasets/:key/payees` *(Tier 1)* | Top payees |
 
 Every report accepts `tz` (default `+03:00`) and `rateOverrides`, and returns `{ baseCurrency, tz, ratesUsed, warnings, data }`.
 

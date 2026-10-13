@@ -66,7 +66,7 @@ describe('analytics API', () => {
   });
 
   it('unimplemented reports answer 501, not 404', async () => {
-    expect((await app().inject(`/datasets/${key}/tags`)).statusCode).toBe(501);
+    expect((await app().inject(`/datasets/${key}/payees`)).statusCode).toBe(501);
   });
 });
 
@@ -100,5 +100,22 @@ describe('projection route', () => {
     expect((await a.inject(`/datasets/${key}/projection?asOf=${asOf}`)).statusCode).toBe(400); // to is required
     expect((await a.inject(`/datasets/${key}/projection?asOf=${asOf}&to=2026-10-01`)).statusCode).toBe(400); // to before asOf
     expect((await a.inject(`/datasets/${key}/projection?asOf=${asOf}&to=2026-11-30&window=0`)).statusCode).toBe(400);
+  });
+});
+
+describe('tags route', () => {
+  it('buckets tagged money over the range and validates params', async () => {
+    const a = app();
+    const tagId = '00000000-0000-4000-8000-0000000000a1';
+    const t = tx({ accountId: ID.cash, type: 'EXPENSE', amount: 40, dateTime: utc('2026-09-03T10:00:00Z') });
+    const payload = makeBackup({ transactions: [t], tags: [{ id: tagId, name: 'Trip' }], tagAssociations: [{ tagId, associatedId: t.id }] });
+    await a.inject({ method: 'PUT', url: `/datasets/${key}`, payload });
+    const res = (await a.inject(`/datasets/${key}/tags?from=2026-09-01&to=2026-10-31&granularity=month`)).json();
+    expect(res.data.tags).toEqual([{ id: tagId, name: 'Trip', income: 0, expense: 40 }]);
+    expect(res.data.buckets).toEqual([
+      { bucket: '2026-09', income: [], expense: [{ tagIds: [tagId], amount: 40, count: 1 }] },
+      { bucket: '2026-10', income: [], expense: [] },
+    ]);
+    expect((await a.inject(`/datasets/${key}/tags?granularity=hour`)).statusCode).toBe(400);
   });
 });

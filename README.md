@@ -60,7 +60,7 @@ For this loop, also add `http://localhost:5173/api/auth/callback` as a redirect 
 - A transaction with a `dateTime` is **executed** and always counts, even if it also has a `dueDate`. One with only a `dueDate` is **planned** (overdue or upcoming); planned items never count toward balances, totals, budgets or trends.
 - Accounts excluded from balance don't count toward net worth, and their own income and expense never count anywhere. A transfer to or from one counts as expense or income on the included side, under its category. A transfer between two included accounts is never income or expense. Deleted items are ignored. Loan records are ignored, but loan-linked transactions count normally.
 - Budgets run per calendar month and count money out in their categories only. Budgets with no categories are ignored and produce a warning. The projection appears after day 7.
-- A transaction with several tags counts once per tag, so tag totals can exceed the overall total.
+- A tag's own total counts every transaction carrying it, so tag totals can add up to more than was spent. Charting several tags together counts a transaction that carries more than one of them once, in its own segment for that combination (e.g. "Trip + Work"), so overlaps stay visible and the bars add up to what the tags actually cost.
 
 ## Repository layout
 
@@ -97,10 +97,12 @@ Make the CI jobs required status checks on `main` so a failing gate blocks the m
 | Engine: validation, rules, timezone bucketing, balances, FX core | done, tested |
 | FX fetching: ECB, cache, stale, fallback hook, overrides, `ratesUsed` | done, tested |
 | Reports: transactions, balances / net worth, income & expense summary, trends (timeseries) | done, tested |
-| Reports: tags, payees (Tier 1) | routes return `501`; next per plan §7 |
+| Reports: tags (Tier 1) | done, tested |
+| Reports: payees (Tier 1) | route returns `501`; next per plan §7 |
 | drive-sync: OAuth, session, folder, listing, size limit, backoff, proxy + re-ingest | done, tested |
 | Dashboard: transactions, balances, income & expense, trends (charts + table view), rates & timezone | done |
-| Dashboard: tags, payees | tabs show "coming soon" until the reports land |
+| Dashboard: tags (stacked per-tag chart, totals, average per period) | done |
+| Dashboard: payees | tab shows the raw `501` response until the report lands |
 | k8s, CI and release | written; first real run pending |
 | Golden test against a real backup | pending (needs a sanitized real backup) |
 

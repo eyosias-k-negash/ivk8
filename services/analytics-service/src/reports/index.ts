@@ -1,7 +1,7 @@
 /**
  * Report builders: pure functions (dataset, params, rates) -> contract shapes.
- * Implemented: transactions table, balances/net worth.
- * TODO (plan section 7): summary, timeseries (Tier 0); budgets, planned, tags, payees (Tier 1).
+ * Here: transactions table, balances/net worth, and the money-flow rules every other report shares.
+ * Elsewhere in reports/: flows (summary, timeseries), budgets, planned, projection, tags. TODO: payees (plan section 7).
  */
 import type { AccountBalance, BalancesData, TransactionRow } from '@ivy/contracts';
 import { computeBalances } from '../engine/balances';
@@ -106,7 +106,7 @@ export function transactionsTable(ds: Dataset, rates: RateTable): TransactionRow
       accountName: ds.accounts.get(t.accountId)?.name ?? '(unknown account)',
       toAccountName: t.toAccountId ? (ds.accounts.get(t.toAccountId)?.name ?? '(unknown account)') : null,
       categoryName: t.categoryId ? (ds.categories.get(t.categoryId)?.name ?? null) : null,
-      tags: ds.tagsByTransaction.get(t.id) ?? [],
+      tags: (ds.tagsByTransaction.get(t.id) ?? []).map((id) => ds.tags.get(id)!.name),
       amount: t.amount,
       currency,
       amountBase: toBase(t.amount, currency, ds.baseCurrency, rates),

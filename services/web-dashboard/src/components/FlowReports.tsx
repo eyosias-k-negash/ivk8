@@ -129,11 +129,12 @@ export function SummaryTab({ fileId, range }: { fileId: string; range: DateRange
   );
 }
 
-function Kpi({ label, value }: { label: string; value: string }) {
+export function Kpi({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
     <div className="kpi">
       <div className="label">{label}</div>
       <div className="value">{value}</div>
+      {note && <div className="note">{note}</div>}
     </div>
   );
 }

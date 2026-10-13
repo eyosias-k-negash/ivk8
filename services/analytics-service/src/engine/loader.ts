@@ -1,6 +1,6 @@
 import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
-import type { Account, Backup, Budget, Category, Transaction, Warning } from './types';
+import type { Account, Backup, Budget, Category, Tag, Transaction, Warning } from './types';
 import { DEFAULT_RULES, classify, isShellBudget, type RuleConfig } from './rules';
 import schema from '../../schema/schema-new.json' with { type: 'json' };
 
@@ -41,7 +41,9 @@ export interface Dataset {
   transactions: Transaction[];
   /** Non-deleted budgets that include at least one category. Shell budgets are dropped. */
   budgets: Budget[];
-  /** transactionId -> tag names (missing tags/associations => empty). */
+  /** Non-deleted tags, indexed by id. */
+  tags: Map<string, Tag>;
+  /** transactionId -> ids of its live tags, each once (missing tags/associations => empty). */
   tagsByTransaction: Map<string, string[]>;
   warnings: Warning[];
 }
@@ -138,15 +140,13 @@ export function ingest(raw: unknown, opts: IngestOptions = {}): Dataset {
     });
 
   // Tags (both arrays optional; missing = empty)
-  const tagNames = new Map<string, string>();
-  for (const t of data.tags ?? []) if (!t.isDeleted) tagNames.set(t.id, t.name);
+  const tags = new Map<string, Tag>();
+  for (const t of data.tags ?? []) if (!t.isDeleted) tags.set(t.id, t);
   const tagsByTransaction = new Map<string, string[]>();
   for (const assoc of data.tagAssociations ?? []) {
-    if (assoc.isDeleted) continue;
-    const name = tagNames.get(assoc.tagId);
-    if (!name) continue;
+    if (assoc.isDeleted || !tags.has(assoc.tagId)) continue;
     const list = tagsByTransaction.get(assoc.associatedId) ?? [];
-    list.push(name);
+    if (!list.includes(assoc.tagId)) list.push(assoc.tagId);
     tagsByTransaction.set(assoc.associatedId, list);
   }
 
@@ -157,6 +157,7 @@ export function ingest(raw: unknown, opts: IngestOptions = {}): Dataset {
     categories,
     transactions,
     budgets,
+    tags,
     tagsByTransaction,
     warnings,
   };

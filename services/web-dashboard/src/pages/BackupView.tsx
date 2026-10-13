@@ -10,6 +10,7 @@ import { TransactionsTable } from '../components/TransactionsTable';
 import { fmtMoney } from '../format';
 import { BudgetsTab } from '../components/BudgetsTab';
 import { ProjectedTab } from '../components/ProjectedTab';
+import { TagsTab } from '../components/TagsTab';
 import { RangePicker, SummaryTab, TrendsTab, presetRange, type DateRange } from '../components/FlowReports';
 
 const TABS = ['Transactions', 'Balances', 'Income & expense', 'Trends', 'Budgets', 'Projected', 'Tags', 'Payees', 'Rates & timezone'] as const;
@@ -34,17 +35,12 @@ export function BackupView({ fileId, onBack }: { fileId: string; onBack: () => v
       </nav>
       {tab === 'Transactions' && <TransactionsTab fileId={fileId} />}
       {tab === 'Balances' && <BalancesTab fileId={fileId} />}
-      {(tab === 'Income & expense' || tab === 'Trends' || tab === 'Budgets') && <RangePicker value={range} onChange={setRange} />}
+      {(tab === 'Income & expense' || tab === 'Trends' || tab === 'Budgets' || tab === 'Tags') && <RangePicker value={range} onChange={setRange} />}
       {tab === 'Income & expense' && <SummaryTab fileId={fileId} range={range} />}
       {tab === 'Trends' && <TrendsTab fileId={fileId} range={range} />}
       {tab === 'Budgets' && <BudgetsTab fileId={fileId} range={range} />}
       {tab === 'Projected' && <ProjectedTab fileId={fileId} />}
-      {tab === 'Tags' && (
-        <>
-          <p className="muted">A transaction with several tags counts once under each tag, so tag totals can exceed the overall total.</p>
-          <Pending fileId={fileId} report="tags" />
-        </>
-      )}
+      {tab === 'Tags' && <TagsTab fileId={fileId} range={range} />}
       {tab === 'Payees' && <Pending fileId={fileId} report="payees" />}
       {tab === 'Rates & timezone' && rates.data && <SettingsTab base={rates.data.baseCurrency} rates={rates.data.ratesUsed} />}
     </section>

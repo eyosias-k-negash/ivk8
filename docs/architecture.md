@@ -82,7 +82,8 @@ Every report accepts `tz` and `rateOverrides` and returns `ratesUsed` and `warni
 | §5 timezone bucketing | `engine/time.ts` |
 | §6 API | `analytics-service/src/server.ts`, mirrored by `drive-sync-service/src/server.ts` |
 | §5 income/expense summary, §7 timeseries | `reports/flows.ts` (range `from`/`to` in the request tz; `from=all` = since first transaction) |
-| Tags, payees | routes exist and return `501` until implemented in `reports/` |
+| §5 tags | `reports/tags.ts` (per-tag totals + per-bucket tag sets; the dashboard's `src/tags.ts` stacks them per tag and per combination, without double counting) |
+| Payees | route exists and returns `501` until implemented in `reports/` |
 
 ## Known limitations
 

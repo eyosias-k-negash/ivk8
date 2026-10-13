@@ -29,7 +29,7 @@ describe('ingest', () => {
     expect(ds.tagsByTransaction.size).toBe(0);
   });
 
-  it('joins tags via associations, skipping deleted ones', () => {
+  it('joins tags via associations by id, skipping deleted ones and repeats', () => {
     const t = tx({ accountId: ID.cash, type: 'EXPENSE', amount: 5, dateTime: 1 });
     const tagA = '00000000-0000-4000-8000-0000000000a1';
     const tagB = '00000000-0000-4000-8000-0000000000a2';
@@ -44,10 +44,12 @@ describe('ingest', () => {
           { tagId: tagA, associatedId: t.id },
           { tagId: tagB, associatedId: t.id },
           { tagId: tagA, associatedId: t.id, isDeleted: true },
+          { tagId: tagA, associatedId: t.id }, // same pair twice: counts once
         ],
       }),
     );
-    expect(ds.tagsByTransaction.get(t.id)).toEqual(['trip']);
+    expect(ds.tagsByTransaction.get(t.id)).toEqual([tagA]);
+    expect(ds.tags.get(tagA)?.name).toBe('trip');
   });
 
   it('drops shell budgets and warns; keeps real ones; ignores accountIdsSerialized', () => {

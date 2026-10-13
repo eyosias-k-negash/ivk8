@@ -9,6 +9,7 @@ import { RateService } from './rates/rateService';
 import { budgetTimeseriesReport, budgetsList } from './reports/budgets';
 import { plannedReport } from './reports/planned';
 import { MAX_WINDOW, parseWindow, projectionReport } from './reports/projection';
+import { tagsReport } from './reports/tags';
 import { balancesReport, currenciesInUse, transactionsTable } from './reports';
 import {
   RangeTooLarge,
@@ -208,12 +209,19 @@ export function buildApp(deps: AppDeps = {}): FastifyInstance {
     }),
   );
 
-  // ---- not yet implemented (plan section 7). Routes exist so the contract is visible end to end. ----
-  for (const name of ['tags', 'payees']) {
-    app.get<Q>(`/datasets/:key/${name}`, async (_req, reply) =>
-      fail(reply, 501, 'NOT_IMPLEMENTED', `${name} report is not implemented yet`),
-    );
-  }
+  app.get<Q>('/datasets/:key/tags', (req, reply) =>
+    withDataset(req.params.key, req.query, reply, (ds, r, q) => {
+      const granularity = parseGranularity(q.granularity);
+      if (!granularity) throw new BadRequest('granularity must be DAY, WEEK, MONTH or YEAR');
+      const { from, to } = range(ds, q);
+      return tagsReport(ds, from, to, granularity, q.tz as string, r);
+    }),
+  );
+
+  // ---- not yet implemented (plan section 7). The route exists so the contract is visible end to end. ----
+  app.get<Q>('/datasets/:key/payees', async (_req, reply) =>
+    fail(reply, 501, 'NOT_IMPLEMENTED', 'payees report is not implemented yet'),
+  );
 
   return app;
 }
