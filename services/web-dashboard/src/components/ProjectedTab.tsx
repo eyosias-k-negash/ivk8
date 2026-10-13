@@ -31,7 +31,7 @@ interface Series {
   total: number;
 }
 
-/** Money out is stored negative so it stacks below the zero line. */
+/** Expenses are stored negative so they stack below the zero line. */
 type Row = { bucket: string; [NET_WORTH]: number } & Record<string, string | number>;
 
 interface View {
@@ -40,9 +40,9 @@ interface View {
   rows: Row[];
 }
 
-/** Both modes stack money into and out of net worth, transfers to or from excluded accounts included: not just income and expense. */
-const IN = 'Money in';
-const OUT = 'Money out';
+/** As in every tab: a transfer to or from an excluded account is income or expense; nothing else on those accounts is. */
+const IN = 'Income';
+const OUT = 'Expense';
 
 /** Biggest category at the bottom of its stack; overflow past the palette folds into a muted "Other". */
 function rankSeries(kind: Kind, totals: Map<string, number>, names: Map<string, string>): Series[] {
@@ -201,7 +201,7 @@ function FlowTooltip({ active, payload, income, expense, base, head }: {
   );
 }
 
-/** Money in stacked above zero and money out below (right axis), with net worth in its own band on top (left axis). */
+/** Income stacked above zero and expenses below (right axis), with net worth in its own band on top (left axis). */
 function FlowChart({ view, base, label, head, lines, today }: {
   view: View;
   base: string;
@@ -374,19 +374,19 @@ function PlannedProjection({ fileId, range, granularity }: { fileId: string; ran
     <>
       <Unconverted list={r.data.data.unconverted} />
       <p className="budget-sum">
-        Planned money in {fmtMoney(incomeTotal, base)} and out {fmtMoney(expenseTotal, base)}: net worth goes from{' '}
+        Planned income {fmtMoney(incomeTotal, base)} and expense {fmtMoney(expenseTotal, base)}: net worth goes from{' '}
         {fmtMoney(r.data.data.startingNetWorth, base)} to {fmtMoney(last.netWorth, base)}. Overdue planned items are assumed to happen on their due date.
       </p>
-      {!view.income.length && !view.expense.length && <p className="muted">No planned money in or out of net worth falls in this range.</p>}
+      {!view.income.length && !view.expense.length && <p className="muted">No planned income or expenses fall in this range.</p>}
       <p className="muted" style={{ margin: '0 0 4px', fontSize: 12 }}>
-        Line: projected net worth (left axis, top band). Bars: planned money into net worth above zero, out below (right axis): income and
-        expense on accounts included in the balance, and transfers to or from an excluded account, under their category, or their two
-        accounts if they have none. Transfers between included accounts are never bars, whatever the currencies.
+        Line: projected net worth (left axis, top band). Bars: planned income above zero, expenses below (right axis). As in every tab,
+        income and expense on accounts excluded from the balance are left out, a transfer to or from one counts under its category (or
+        its two accounts if it has none), and transfers between included accounts never count.
       </p>
       <FlowChart
         view={view}
         base={base}
-        label={`Planned money in and out per ${UNIT[granularity]} with projected net worth`}
+        label={`Planned income and expenses per ${UNIT[granularity]} with projected net worth`}
         head={(row, net) => (
           <>
             <div>Projected net worth {fmtMoney(row[NET_WORTH], base)}</div>
@@ -397,8 +397,8 @@ function PlannedProjection({ fileId, range, granularity }: { fileId: string; ran
           <Line key="nw" yAxisId="nw" dataKey={NET_WORTH} name="Projected net worth" type="natural" stroke="var(--fg)" strokeWidth={2} dot={{ r: 3, fill: 'var(--fg)' }} isAnimationActive={false} />,
         ]}
       />
-      <CategoryLegend title="Planned money in" series={view.income} total={incomeTotal} base={base} />
-      <CategoryLegend title="Planned money out" series={view.expense} total={expenseTotal} base={base} />
+      <CategoryLegend title="Planned income" series={view.income} total={incomeTotal} base={base} />
+      <CategoryLegend title="Planned expenses" series={view.expense} total={expenseTotal} base={base} />
       <FlowTable view={view} base={base} />
     </>
   );
@@ -431,7 +431,7 @@ function AverageProjection({ fileId, to, granularity, lookback }: { fileId: stri
         {d.windowUsed ? (
           <>
             Averaging the last {plural(d.windowUsed, `complete ${unit}`)} ({used[0]!.bucket}
-            {used.length > 1 && ` to ${used.at(-1)!.bucket}`}): money in {fmtMoney(incomeAvg, base)}, out {fmtMoney(expenseAvg, base)}, net{' '}
+            {used.length > 1 && ` to ${used.at(-1)!.bucket}`}): income {fmtMoney(incomeAvg, base)}, expense {fmtMoney(expenseAvg, base)}, net{' '}
             {fmtMoney(incomeAvg - expenseAvg, base)} per {unit}. From today's net worth of {fmtMoney(d.currentNetWorth, base)}, the projection reaches{' '}
             {fmtMoney(last?.netWorth ?? d.currentNetWorth, base)} by {to}.
             {d.windowUsed < d.window && ` Only ${plural(d.windowUsed, `complete ${unit}`)} of history exist, so the average uses those.`}
@@ -444,16 +444,17 @@ function AverageProjection({ fileId, to, granularity, lookback }: { fileId: stri
         )}
       </p>
       <p className="muted" style={{ margin: '0 0 4px', fontSize: 12 }}>
-        Line: net worth, solid where actual and dashed where projected (left axis, top band). Bars: money into net worth above zero, out
-        below (right axis). Solid parts are executed transactions, including any dated after today, whatever their planned date. Dimmed
-        parts top each flow up to its average, never below what is already executed. Transfers count only to or from an account excluded
-        from the balance, under their category, or their two accounts if they have none; never between included accounts, whatever the
-        currencies. Planned items are not added, since recurring ones are already in the history.
+        Line: net worth, solid where actual and dashed where projected (left axis, top band). Bars: income above zero, expenses below
+        (right axis). Solid parts are executed transactions, including any dated after today, whatever their planned date. Dimmed parts
+        top each category up to its average, never below what is already executed. As in every tab, income and expense on accounts
+        excluded from the balance are left out, a transfer to or from one counts under its category (or its two accounts if it has
+        none), and transfers between included accounts never count. Planned items are not added, since recurring ones are already in the
+        history.
       </p>
       <FlowChart
         view={view}
         base={base}
-        label={`Net worth projected from the average money in and out of the last ${plural(d.windowUsed, unit)}`}
+        label={`Net worth projected from the average income and expense of the last ${plural(d.windowUsed, unit)}`}
         today={current?.bucket}
         head={(row, net) =>
           row.phase === 'actual' ? (
@@ -485,8 +486,8 @@ function AverageProjection({ fileId, to, granularity, lookback }: { fileId: stri
           <Line key="actual" yAxisId="nw" dataKey={NW_ACTUAL} name="Net worth" type="natural" stroke="var(--fg)" strokeWidth={2} dot={{ r: 3, fill: 'var(--fg)' }} isAnimationActive={false} />,
         ]}
       />
-      <CategoryLegend title={`Average money in per ${unit}`} series={view.income} total={incomeAvg} base={base} />
-      <CategoryLegend title={`Average money out per ${unit}`} series={view.expense} total={expenseAvg} base={base} />
+      <CategoryLegend title={`Average income per ${unit}`} series={view.income} total={incomeAvg} base={base} />
+      <CategoryLegend title={`Average expenses per ${unit}`} series={view.expense} total={expenseAvg} base={base} />
       <FlowTable view={view} base={base} basis={(row) => basisOf(row, view)} />
     </>
   );

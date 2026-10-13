@@ -147,8 +147,12 @@ export interface SummaryData {
   expense: number;
   net: number;
   byCategory: BreakdownRow[];
+  /** Per account included in the balance; a transfer to or from an excluded account counts on its included side. */
   byAccount: (BreakdownRow & { currency: string; incomeNative: number; expenseNative: number })[];
-  /** Transactions counted in the range (executed INCOME/EXPENSE only). */
+  /**
+   * Transactions counted in the range: executed income and expense on accounts included in the balance, and transfers
+   * to or from an excluded account. Transfers between included accounts never count.
+   */
   count: number;
   /** Currencies whose amounts are left out of base totals because no rate was available. */
   unconverted: string[];
@@ -156,7 +160,10 @@ export interface SummaryData {
 
 export interface TimeseriesPoint {
   bucket: string;
-  /** Present when groupBy != none. */
+  /**
+   * Present when groupBy != none. By category: a category id, "uncategorized", or "transfer:<from>><to>" for an
+   * uncategorized transfer to or from an excluded account. By account: the account included in the balance.
+   */
   groupId?: string;
   groupName?: string;
   income: number;
@@ -189,7 +196,7 @@ export interface BudgetBucket {
   bucket: string;
   /** Budget scaled to this bucket by exact calendar days: each day carries amount / days-in-its-month. */
   threshold: number;
-  /** Expense per budget category id. Categories with nothing in the bucket are absent. */
+  /** Money out per budget category id: expense, and categorized transfers to an excluded account. Nothing = absent. */
   spent: Record<string, number>;
 }
 

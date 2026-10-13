@@ -3,18 +3,20 @@
  *
  * Rules applied here:
  * - A budget's `amount` is for one calendar month, in base currency (plan §5, Day 0 decision 2).
- * - Spend = executed EXPENSE in the budget's categories, all accounts (accountIdsSerialized is ignored).
+ * - Spend = executed money out of net worth in the budget's categories (accountIdsSerialized is ignored): expense on
+ *   accounts included in the balance, and categorized transfers to an excluded account (see `moneyFlow`). Expense on
+ *   an excluded account never counts.
  * - Each bucket's threshold scales by exact calendar days: every local day carries amount / days-in-its-month.
  *   A whole month is therefore exactly `amount`, a year exactly 12x, and a week is 7 days' worth.
  *   The threshold covers the whole bucket even when the range clips it, because the bar stands for the period.
  */
 import type { BudgetBucket, BudgetInfo, BudgetTimeseriesData, BudgetsData, Granularity } from '@ivy/contracts';
-import { toBase, type RateTable } from '../engine/currency';
+import type { RateTable } from '../engine/currency';
 import type { Dataset } from '../engine/loader';
 import { classify, parseIds } from '../engine/rules';
 import { bucketKey } from '../engine/time';
 import type { Budget } from '../engine/types';
-import { accountCurrency } from './index';
+import { moneyFlow } from './index';
 import { bucketKeys } from './flows';
 
 const round = (n: number) => Math.round(n * 100) / 100;
@@ -75,18 +77,14 @@ export function budgetTimeseriesReport(
     buckets.set(k, { bucket: k, threshold: bucketThreshold(budget.amount, k, granularity), spent: {} });
 
   for (const t of ds.transactions) {
-    if (t.type !== 'EXPENSE' || !t.categoryId || !ids.has(t.categoryId)) continue;
+    if (t.type === 'INCOME' || !t.categoryId || !ids.has(t.categoryId)) continue;
     if (classify(t, ds.rules) !== 'EXECUTED') continue;
     const at = t.dateTime as number;
     if (at < from || at >= to) continue;
-    const currency = accountCurrency(ds, t.accountId);
-    const base = toBase(t.amount, currency, ds.baseCurrency, rates);
-    if (base == null) {
-      unconverted.add(currency);
-      continue;
-    }
+    const money = moneyFlow(ds, t, rates, unconverted);
+    if (money?.direction !== 'out' || money.base == null) continue; // not spending, or no rate (listed in unconverted)
     const row = buckets.get(bucketKey(at, granularity, tz));
-    if (row) row.spent[t.categoryId] = (row.spent[t.categoryId] ?? 0) + base;
+    if (row) row.spent[t.categoryId] = (row.spent[t.categoryId] ?? 0) + money.base;
   }
 
   const out = [...buckets.values()].map((b) => ({

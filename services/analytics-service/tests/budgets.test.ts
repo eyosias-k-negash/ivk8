@@ -20,6 +20,11 @@ const ds = ingest(
       tx({ accountId: ID.cash, type: 'EXPENSE', amount: 999, dateTime: utc('2026-09-06T09:00:00Z') }), // uncategorized
       tx({ accountId: ID.cash, type: 'INCOME', amount: 999, categoryId: ID.food, dateTime: utc('2026-09-06T09:00:00Z') }),
       tx({ accountId: ID.cash, type: 'EXPENSE', amount: 999, categoryId: ID.food, dueDate: utc('2026-09-20T09:00:00Z') }), // planned
+      tx({ accountId: ID.excluded, type: 'EXPENSE', amount: 999, categoryId: ID.food, dateTime: utc('2026-09-07T09:00:00Z') }), // excluded account only
+      // a categorized transfer to an excluded account is spending; one back in, or between included accounts, is not
+      tx({ accountId: ID.cash, type: 'TRANSFER', amount: 60, toAccountId: ID.excluded, categoryId: ID.fun, dateTime: utc('2026-10-03T09:00:00Z') }),
+      tx({ accountId: ID.excluded, type: 'TRANSFER', amount: 999, toAccountId: ID.cash, categoryId: ID.food, dateTime: utc('2026-10-04T09:00:00Z') }),
+      tx({ accountId: ID.cash, type: 'TRANSFER', amount: 999, toAccountId: ID.usd, toAmount: 5, categoryId: ID.food, dateTime: utc('2026-10-05T09:00:00Z') }),
     ],
   }),
 );
@@ -52,10 +57,10 @@ describe('budgetTimeseriesReport', () => {
   const r = parseRange({ from: '2026-09-01', to: '2026-10-31' }, '+03:00');
   const out = budgetTimeseriesReport(ds, ID.budget, r.from, r.to, 'MONTH', '+03:00', rates)!;
 
-  it('counts only executed expenses in the budget categories, converted to base', () => {
+  it('counts executed money out of net worth in the budget categories, converted to base', () => {
     expect(out.buckets.map((b) => b.bucket)).toEqual(['2026-09', '2026-10']);
-    expect(out.buckets[0]!.spent).toEqual({ [ID.food]: 500 });
-    expect(out.buckets[1]!.spent).toEqual({ [ID.fun]: 40 });
+    expect(out.buckets[0]!.spent).toEqual({ [ID.food]: 500 }); // not the expense on the excluded account
+    expect(out.buckets[1]!.spent).toEqual({ [ID.fun]: 40 + 60 }); // the expense, plus the transfer to the excluded account
     expect(out.buckets.every((b) => b.threshold === 3000)).toBe(true);
   });
 

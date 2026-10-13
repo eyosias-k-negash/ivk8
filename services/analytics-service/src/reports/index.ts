@@ -22,7 +22,7 @@ const inBalance = (ds: Dataset, accountId: string | null | undefined): boolean =
 /**
  * A transaction's effect on net worth, in base currency, as the Balances tab would see it. Only accounts included
  * in the balance count. A transfer between two included accounts moves it only by valuation, when the two currencies
- * convert differently at today's rates; it is never money in or out (see `isInternalTransfer`). A side whose currency
+ * convert differently at today's rates; it is never money in or out (see `moneyFlow`). A side whose currency
  * has no rate counts as 0 and is listed in `unconverted`.
  */
 export function netWorthDelta(ds: Dataset, t: Transaction, rates: RateTable, unconverted: Set<string>): number {
@@ -39,16 +39,42 @@ export function netWorthDelta(ds: Dataset, t: Transaction, rates: RateTable, unc
   return -side(t.accountId, t.amount) + (t.toAccountId ? side(t.toAccountId, t.toAmount ?? t.amount) : 0);
 }
 
-/**
- * A transfer between two accounts included in the balance, whatever their currencies: neither money in nor out, so
- * it never shows in a flow chart. Only transfers to or from an excluded account do.
- */
-export function isInternalTransfer(ds: Dataset, t: Transaction): boolean {
-  return t.type === 'TRANSFER' && inBalance(ds, t.accountId) && inBalance(ds, t.toAccountId);
+export interface MoneyFlow {
+  direction: 'in' | 'out';
+  /** The side included in the balance, and the amount in its own currency. */
+  accountId: string;
+  currency: string;
+  native: number;
+  /** In base currency; null when the currency has no rate (then listed in `unconverted`). */
+  base: number | null;
 }
 
 /**
- * What a flow chart files a transaction under: its category whenever it has one, transfers included; otherwise
+ * Money into or out of net worth, as every income and expense view counts it: income and expense on accounts
+ * included in the balance, and transfers to or from an excluded account (out when money leaves an included account,
+ * in when it arrives). Null for everything else: income and expense on an excluded account, and transfers between
+ * two included accounts, whatever their currencies.
+ */
+export function moneyFlow(ds: Dataset, t: Transaction, rates: RateTable, unconverted: Set<string>): MoneyFlow | null {
+  let direction: MoneyFlow['direction'];
+  let accountId: string;
+  let native: number;
+  if (t.type === 'TRANSFER') {
+    const fromIn = inBalance(ds, t.accountId);
+    if (fromIn === inBalance(ds, t.toAccountId)) return null;
+    [direction, accountId, native] = fromIn ? ['out', t.accountId, t.amount] : ['in', t.toAccountId!, t.toAmount ?? t.amount];
+  } else {
+    if (!inBalance(ds, t.accountId)) return null;
+    [direction, accountId, native] = [t.type === 'INCOME' ? 'in' : 'out', t.accountId, t.amount];
+  }
+  const currency = accountCurrency(ds, accountId);
+  const base = toBase(native, currency, ds.baseCurrency, rates);
+  if (base == null) unconverted.add(currency);
+  return { direction, accountId, currency, native, base };
+}
+
+/**
+ * What a breakdown files a transaction under: its category whenever it has one, transfers included; otherwise
  * "Uncategorized", or for an uncategorized transfer the two accounts it moves money between.
  */
 export function flowOf(ds: Dataset, t: Transaction): { id: string; name: string } {

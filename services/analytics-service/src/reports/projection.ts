@@ -21,7 +21,7 @@ import type { RateTable } from '../engine/currency';
 import type { Dataset } from '../engine/loader';
 import { classify } from '../engine/rules';
 import { bucketEndMs, bucketKey, bucketStartMs } from '../engine/time';
-import { flowOf, isInternalTransfer, netWorthDelta } from './index';
+import { flowOf, moneyFlow, netWorthDelta } from './index';
 import { bucketKeys, earliestExecuted } from './flows';
 
 const round = (n: number) => Math.round(n * 100) / 100;
@@ -62,14 +62,15 @@ export function projectionReport(
     if (classify(t, ds.rules) !== 'EXECUTED') continue;
     const at = t.dateTime as number;
     const delta = netWorthDelta(ds, t, rates, unconverted);
-    if (!delta) continue; // leaves net worth as it is
-    events.push({ at, delta });
+    if (delta) events.push({ at, delta });
 
-    if (at < windowStart || at >= to || isInternalTransfer(ds, t)) continue;
+    if (at < windowStart || at >= to) continue;
+    const money = moneyFlow(ds, t, rates, unconverted);
+    if (!money?.base) continue; // not money in or out, or no rate (listed in unconverted)
     const flow = flowOf(ds, t);
     names.set(flow.id, flow.name);
-    const side = flows.get(bucketKey(at, granularity, tz))?.[delta > 0 ? 'income' : 'expense'];
-    if (side) side[flow.id] = (side[flow.id] ?? 0) + Math.abs(delta);
+    const side = flows.get(bucketKey(at, granularity, tz))?.[money.direction === 'in' ? 'income' : 'expense'];
+    if (side) side[flow.id] = (side[flow.id] ?? 0) + money.base;
   }
 
   const average = (side: 'income' | 'expense'): Amounts => {

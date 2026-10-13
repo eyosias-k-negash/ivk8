@@ -17,7 +17,7 @@ import type { RateTable } from '../engine/currency';
 import type { Dataset } from '../engine/loader';
 import { classify } from '../engine/rules';
 import { bucketKey, bucketStartMs } from '../engine/time';
-import { flowOf, isInternalTransfer, netWorthDelta } from './index';
+import { flowOf, moneyFlow, netWorthDelta } from './index';
 import { bucketKeys } from './flows';
 
 const round = (n: number) => Math.round(n * 100) / 100;
@@ -48,14 +48,15 @@ export function plannedReport(
 
     // Net worth effect (a currency that cannot be converted counts as 0; it is reported instead).
     const delta = netWorthDelta(ds, t, rates, unconverted);
-    if (!delta) continue; // only excluded accounts, or money staying within net worth: no line move, no bar
-    events.push({ at, delta });
+    if (delta) events.push({ at, delta });
 
-    if (!planned || at < from || at >= to || isInternalTransfer(ds, t)) continue;
+    if (!planned || at < from || at >= to) continue;
+    const money = moneyFlow(ds, t, rates, unconverted);
+    if (!money?.base) continue; // not money in or out, or no rate (listed in unconverted)
     const flow = flowOf(ds, t);
     names.set(flow.id, flow.name);
-    const side = buckets.get(bucketKey(at, granularity, tz))?.[delta > 0 ? 'income' : 'expense'];
-    if (side) side[flow.id] = (side[flow.id] ?? 0) + Math.abs(delta);
+    const side = buckets.get(bucketKey(at, granularity, tz))?.[money.direction === 'in' ? 'income' : 'expense'];
+    if (side) side[flow.id] = (side[flow.id] ?? 0) + money.base;
   }
 
   // Sweep the time-ordered events once for the running net worth.

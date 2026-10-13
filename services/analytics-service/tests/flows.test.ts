@@ -120,3 +120,45 @@ describe('timeseriesReport', () => {
     expect(t.points.find((p) => p.groupName === 'USD Wallet')).toMatchObject({ bucket: '2026', expense: 300 });
   });
 });
+
+describe('excluded accounts and transfers (summary + timeseries)', () => {
+  const mixed = ingest(
+    makeBackup({
+      transactions: [
+        tx({ accountId: ID.cash, type: 'INCOME', amount: 1000, categoryId: ID.fun, dateTime: utc('2026-09-01T09:00:00Z') }),
+        // only touch the excluded account: never counted
+        tx({ accountId: ID.excluded, type: 'INCOME', amount: 5000, dateTime: utc('2026-09-02T09:00:00Z') }),
+        tx({ accountId: ID.excluded, type: 'EXPENSE', amount: 300, categoryId: ID.food, dateTime: utc('2026-09-03T09:00:00Z') }),
+        // to an excluded account: expense under its category, on the included side
+        tx({ accountId: ID.cash, type: 'TRANSFER', amount: 200, toAccountId: ID.excluded, categoryId: ID.food, dateTime: utc('2026-09-04T09:00:00Z') }),
+        // from an excluded account, uncategorized: income under its two accounts, in the receiving account's currency
+        tx({ accountId: ID.excluded, type: 'TRANSFER', amount: 50, toAccountId: ID.usd, toAmount: 2, dateTime: utc('2026-09-05T09:00:00Z') }),
+        // between included accounts: never counted, whatever the currencies or category
+        tx({ accountId: ID.cash, type: 'TRANSFER', amount: 400, toAccountId: ID.usd, toAmount: 3, categoryId: ID.fun, dateTime: utc('2026-09-06T09:00:00Z') }),
+      ],
+    }),
+  );
+  const s = summaryReport(mixed, sept.from, sept.to, rates);
+  const inFromHidden = `transfer:${ID.excluded}>${ID.usd}`;
+
+  it('counts transfers to or from excluded accounts and nothing that stays on either side', () => {
+    expect(s).toMatchObject({ income: 1000 + 200, expense: 200, net: 1000, count: 3 });
+    expect(s.byCategory.map((c) => [c.name, c.income, c.expense])).toEqual([
+      ['Fun', 1000, 0],
+      ['Food', 0, 200],
+      ['Transfer Hidden → USD Wallet', 200, 0],
+    ]);
+  });
+
+  it('files each flow under its included account, with native amounts', () => {
+    expect(s.byAccount.map((a) => a.name).sort()).toEqual(['Cash', 'USD Wallet']);
+    expect(s.byAccount.find((a) => a.name === 'USD Wallet')).toMatchObject({ income: 200, incomeNative: 2, expense: 0 });
+  });
+
+  it('carries the same rule into timeseries', () => {
+    const t = timeseriesReport(mixed, sept.from, sept.to, 'MONTH', 'none', '+03:00', rates);
+    expect(t.points).toEqual([{ bucket: '2026-09', income: 1200, expense: 200 }]);
+    const byCat = timeseriesReport(mixed, sept.from, sept.to, 'MONTH', 'category', '+03:00', rates);
+    expect(byCat.points.find((p) => p.groupId === inFromHidden)).toMatchObject({ groupName: 'Transfer Hidden → USD Wallet', income: 200 });
+  });
+});

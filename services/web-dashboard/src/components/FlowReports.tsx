@@ -82,7 +82,11 @@ export function SummaryTab({ fileId, range }: { fileId: string; range: DateRange
         <Kpi label="Transactions" value={String(s.count)} />
       </div>
       <Unconverted list={s.unconverted} />
-      <p className="muted">Executed income and expense only. Transfers and planned payments are not counted.</p>
+      <p className="muted">
+        Executed only; planned payments are not counted. Income and expense on accounts excluded from the balance are left out. A
+        transfer to or from an excluded account counts as expense or income under its category; transfers between included accounts never
+        count.
+      </p>
 
       <h3>By category</h3>
       <table className="grid">
