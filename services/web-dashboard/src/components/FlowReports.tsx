@@ -4,6 +4,7 @@ import { CursorValue } from './CursorValue';
 import type { Granularity, GroupBy, SummaryData, TimeseriesData } from '@ivy/contracts';
 import { useReport } from '../api/hooks';
 import { useParams } from '../state/params';
+import { PrintButton, rangeText } from '../print';
 import { ErrorBox } from './ErrorBox';
 import { fmtMoney, fmtPct, offsetMs } from '../format';
 
@@ -295,6 +296,10 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
             </select>
           </label>
         )}
+        <PrintButton
+          title={view?.title ?? 'Trends'}
+          meta={[rangeText(range), `Per ${granularity.toLowerCase()}`, groupBy === 'none' ? '' : `Split by ${groupBy} (${metric})`]}
+        />
       </div>
       {r.error && <ErrorBox error={r.error} />}
       {!r.data && !r.error && <p className="muted">Loading…</p>}

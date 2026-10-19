@@ -3,6 +3,7 @@ import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recha
 import type { BalancesData, TransactionRow } from '@ivy/contracts';
 import { useReport } from '../api/hooks';
 import { useParams } from '../state/params';
+import { BackupIdContext, PrintButton } from '../print';
 import { ErrorBox } from '../components/ErrorBox';
 import { Warnings } from '../components/Warnings';
 import { RatesTable } from '../components/RatesTable';
@@ -28,6 +29,7 @@ export function BackupView({ fileId, onBack }: { fileId: string; onBack: () => v
   const rates = useReport<null>(fileId, 'rates'); // also warms the dataset in analytics
 
   return (
+    <BackupIdContext.Provider value={fileId}>
     <section className="card">
       <button className="link" onClick={onBack}>← All backups</button>
       {rates.error && <ErrorBox error={rates.error} />}
@@ -49,6 +51,7 @@ export function BackupView({ fileId, onBack }: { fileId: string; onBack: () => v
       {tab === 'Payees' && <Pending fileId={fileId} report="payees" />}
       {tab === 'Rates & timezone' && rates.data && <SettingsTab base={rates.data.baseCurrency} rates={rates.data.ratesUsed} />}
     </section>
+    </BackupIdContext.Provider>
   );
 }
 
@@ -69,11 +72,12 @@ function BalancesTab({ fileId }: { fileId: string }) {
   return (
     <>
       <label>As of <input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} /></label>
+      <PrintButton title={`Balances: net worth ${fmtMoney(data.netWorth, baseCurrency)}`} meta={[asOf ? `As of ${asOf}` : 'As of today']} />
       <h3>Net worth: {fmtMoney(data.netWorth, baseCurrency)}</h3>
       {data.unconverted.length > 0 && (
         <div className="callout warn">Excluded from net worth (no rate): {data.unconverted.join(', ')}. Add an override under “Rates & timezone”.</div>
       )}
-      <div style={{ height: 240 }}>
+      <div className="chart">
         <ResponsiveContainer>
           <BarChart data={chart}><XAxis dataKey="name" /><YAxis /><Tooltip /><Bar dataKey="value" fill="#4f6bed" /></BarChart>
         </ResponsiveContainer>

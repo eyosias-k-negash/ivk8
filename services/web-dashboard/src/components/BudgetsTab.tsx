@@ -3,6 +3,7 @@ import { Bar, BarChart, CartesianGrid, Cell, Customized, ResponsiveContainer, To
 import { CursorValue } from './CursorValue';
 import type { BudgetTimeseriesData, BudgetsData, Granularity } from '@ivy/contracts';
 import { useReport } from '../api/hooks';
+import { PrintButton, rangeText } from '../print';
 import { ErrorBox } from './ErrorBox';
 import { SERIES, Unconverted, type DateRange } from './FlowReports';
 import { fmtMoney, fmtPct } from '../format';
@@ -183,6 +184,10 @@ export function BudgetsTab({ fileId, range }: { fileId: string; range: DateRange
             <option value="YEAR">Year</option>
           </select>
         </label>
+        <PrintButton
+          title={`Budget: ${budgets.find((b) => b.id === budgetId)?.name ?? ''}`}
+          meta={[rangeText(range), `Per ${granularity.toLowerCase()}`]}
+        />
       </div>
       {r.error && <ErrorBox error={r.error} />}
       {!view && !r.error && <p className="muted">Loading…</p>}

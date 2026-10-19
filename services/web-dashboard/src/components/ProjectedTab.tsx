@@ -4,6 +4,7 @@ import { CursorValue } from './CursorValue';
 import type { Granularity, PlannedData, ProjectionData } from '@ivy/contracts';
 import { useReport } from '../api/hooks';
 import { useParams } from '../state/params';
+import { PrintButton, rangeText } from '../print';
 import { ErrorBox } from './ErrorBox';
 import { RelativeRange, SERIES, Unconverted, type DateRange } from './FlowReports';
 import { fmtMoney, fmtPct, offsetMs } from '../format';
@@ -363,6 +364,14 @@ export function ProjectedTab({ fileId }: { fileId: string }) {
             </select>
           </label>
         )}
+        <PrintButton
+          title={mode === 'planned' ? 'Projected: planned items' : 'Projected: moving average'}
+          meta={[
+            mode === 'planned' ? rangeText(range) : `Today – ${range.to}`,
+            `Per ${granularity.toLowerCase()}`,
+            mode === 'average' ? `Average over last ${plural(lookback, UNIT[granularity])}` : '',
+          ]}
+        />
       </div>
       {mode === 'planned' ? (
         <PlannedProjection fileId={fileId} range={range} granularity={granularity} />

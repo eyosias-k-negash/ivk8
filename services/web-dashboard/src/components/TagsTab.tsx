@@ -3,6 +3,7 @@ import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis
 import { CursorValue } from './CursorValue';
 import type { Granularity, TagTotal, TagsData } from '@ivy/contracts';
 import { useReport } from '../api/hooks';
+import { PrintButton, rangeText } from '../print';
 import { ErrorBox } from './ErrorBox';
 import { Kpi, SERIES, Unconverted, type DateRange } from './FlowReports';
 import { fmtMoney, fmtPct } from '../format';
@@ -89,6 +90,10 @@ export function TagsTab({ fileId, range }: { fileId: string; range: DateRange })
             <option value="income">Income</option>
           </select>
         </label>
+        <PrintButton
+          title={`Tags: ${metric === 'expense' ? 'expense' : 'income'}`}
+          meta={[rangeText(range), `Per ${granularity.toLowerCase()}`]}
+        />
       </div>
       {r.error && <ErrorBox error={r.error} />}
       {!r.data && !r.error && <p className="muted">Loading…</p>}

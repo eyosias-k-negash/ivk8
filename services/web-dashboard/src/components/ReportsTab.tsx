@@ -3,6 +3,7 @@ import { Bar, CartesianGrid, ComposedChart, Line, Rectangle, ReferenceLine, Resp
 import type { CustomReportData, CustomReportGroup, CustomReportOption, Granularity, GroupBy, TransactionRow } from '@ivy/contracts';
 import { useReport } from '../api/hooks';
 import { CursorValue } from './CursorValue';
+import { PrintButton, rangeText } from '../print';
 import { ErrorBox } from './ErrorBox';
 import { Kpi, SERIES, Unconverted, type DateRange } from './FlowReports';
 import { TransactionsTable } from './TransactionsTable';
@@ -141,6 +142,10 @@ export function ReportsTab({ fileId, range, config, onChange }: {
         <label>
           <input type="checkbox" checked={config.showNet} onChange={(e) => set({ showNet: e.target.checked })} /> Net line
         </label>
+        <PrintButton
+          title="Custom report"
+          meta={[rangeText(range), `Per ${unit}`, split === 'none' ? '' : `Split by ${split}`]}
+        />
       </div>
       <ReportFilters config={config} options={options.current} base={base} onChange={onChange} />
       {problem && <div className="callout warn">{problem}</div>}
