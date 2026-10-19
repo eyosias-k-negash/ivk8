@@ -61,7 +61,9 @@ export class DriveClient {
           headers: { authorization: `Bearer ${await this.accessToken()}` },
           signal: AbortSignal.timeout(30_000),
         });
-      } catch {
+      } catch (err) {
+        // a failed token refresh (revoked/expired refresh token) must reach the UI as "reconnect"
+        if (err instanceof ReauthRequired) throw err;
         lastErr = new DriveUnavailable('Drive request failed');
         continue;
       }

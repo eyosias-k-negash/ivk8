@@ -37,6 +37,20 @@ describe('DriveClient', () => {
     expect(calls).toHaveLength(1);
   });
 
+  it('surfaces a failed token refresh as ReauthRequired, not DriveUnavailable', async () => {
+    let calls = 0;
+    const fetchFn = (async () => {
+      calls++;
+      return json(200, { files: [] });
+    }) as unknown as typeof fetch;
+    const expired = async (): Promise<string> => {
+      throw new ReauthRequired();
+    };
+    const drive = new DriveClient(expired, { fetchFn, sleep: noSleep, maxRetries: 2 });
+    await expect(drive.listFolders()).rejects.toBeInstanceOf(ReauthRequired);
+    expect(calls).toBe(0);
+  });
+
   it('lists backups newest first across pages', async () => {
     const { drive } = client([
       () => json(200, { nextPageToken: 'n', files: [{ id: 'a', name: 'IvyWalletBackup-20260902-0001.zip', modifiedTime: '2026-09-02', size: '5' }] }),
