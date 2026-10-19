@@ -7,6 +7,7 @@ import { ErrorBox } from './ErrorBox';
 import { Kpi, SERIES, Unconverted, type DateRange } from './FlowReports';
 import { TransactionsTable } from './TransactionsTable';
 import { fmtMoney, fmtPct } from '../format';
+import { signature, toConfigPatch, useSavedFilters } from '../state/savedFilters';
 import {
   ALL, AVG_BUCKET, NET, NET_AVG, OTHER, activeFilters, addRule, amountBounds, checkCondition, clearFilters, mapRule, newCondition,
   newGroup, outerKeys, removeRule, reportQuery, shapeReport, updateRule,
@@ -199,6 +200,15 @@ function ReportFilters({ config, options, base, onChange }: {
   const set = (patch: Partial<ReportConfig>) => onChange((c) => ({ ...c, ...patch }));
   const n = activeFilters(config);
   const edit = (fn: (root: GroupDraft) => GroupDraft) => onChange((c) => ({ ...c, rules: fn(c.rules) }));
+  const saved = useSavedFilters();
+  const [name, setName] = useState('');
+  const here = signature(config);
+  const trimmed = name.trim();
+  const doSave = () => {
+    if (!trimmed) return;
+    saved.save(trimmed, config);
+    setName('');
+  };
   return (
     <fieldset className="report-filters">
       <legend>
@@ -209,6 +219,30 @@ function ReportFilters({ config, options, base, onChange }: {
       <div className="rules">
         <span className="field-label">Conditions on tags, words and amount</span>
         <RuleGroup group={config.rules} depth={0} tags={options?.tags} base={base} edit={edit} />
+      </div>
+      <div className="saved-filters">
+        <span className="field-label">Saved filters</span>
+        <ul>
+          {saved.list.map((f) => (
+            <li key={f.name} className={signature(f) === here ? 'on' : undefined}>
+              <button type="button" className="saved-apply" aria-pressed={signature(f) === here} onClick={() => onChange((c) => ({ ...c, ...toConfigPatch(f) }))}>
+                {f.name}
+              </button>
+              <button type="button" className="saved-remove" aria-label={`Delete saved filter ${f.name}`} onClick={() => saved.remove(f.name)}>×</button>
+            </li>
+          ))}
+          {!saved.list.length && <li className="muted">None yet</li>}
+        </ul>
+        <form
+          className="saved-new"
+          onSubmit={(e) => {
+            e.preventDefault();
+            doSave();
+          }}
+        >
+          <input value={name} maxLength={40} placeholder="Name this filter" aria-label="Name for the saved filter" onChange={(e) => setName(e.target.value)} />
+          <button type="submit" disabled={!trimmed}>{saved.list.some((f) => f.name === trimmed) ? 'Replace' : 'Save'}</button>
+        </form>
       </div>
     </fieldset>
   );

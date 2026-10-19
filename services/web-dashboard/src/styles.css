@@ -112,3 +112,11 @@ button.link { background:none; border:0; color:var(--accent); cursor:pointer; pa
 .rule-remove:hover, .rule-remove:focus-visible { color:var(--fg); background:var(--bg); }
 .rule-actions { display:flex; gap:16px; font-size:13px; padding-left:76px; }
 .rule-empty { margin:0; font-size:13px; }
+.saved-filters { grid-column:1 / -1; display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; border-top:1px solid var(--border); padding-top:10px; min-width:0; }
+.saved-filters ul { list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:6px; flex:1; min-width:0; }
+.saved-filters li { display:flex; border:1px solid var(--border); border-radius:999px; overflow:hidden; font-size:13px; }
+.saved-filters li.muted { border:0; color:var(--muted); }
+.saved-filters li.on { border-color:var(--fg); background:color-mix(in srgb, var(--fg) 8%, var(--card)); }
+.saved-filters li button { border:0; background:none; color:inherit; font:inherit; cursor:pointer; padding:4px 10px; }
+.saved-filters li .saved-remove { padding:4px 8px 4px 2px; color:var(--muted); }
+.saved-new { display:flex; gap:6px; } .saved-new input { width:11em; }
