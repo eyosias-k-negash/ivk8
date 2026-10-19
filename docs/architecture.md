@@ -47,7 +47,7 @@ Public (drive-sync), all under `/api`:
 | `GET /me` | signed-in state, email, chosen folder |
 | `GET /drive/folders?q=` · `PUT /drive/folder` | find and choose the backups folder |
 | `GET /backups` | backup versions in the folder, newest first |
-| `GET /backups/:fileId/{transactions,balances,summary,timeseries,budgets,planned,projection,tags,payees,rates}` | reports (proxied) |
+| `GET /backups/:fileId/{transactions,balances,summary,timeseries,budgets,planned,projection,tags,custom-report,payees,rates}` | reports (proxied) |
 
 Internal (analytics): `PUT /datasets/:key`, `HEAD /datasets/:key`, `GET /datasets/:key/<report>`, `/healthz`, `/readyz`.
 
@@ -82,6 +82,7 @@ Every report accepts `tz` and `rateOverrides` and returns `ratesUsed` and `warni
 | §5 timezone bucketing | `engine/time.ts` |
 | §6 API | `analytics-service/src/server.ts`, mirrored by `drive-sync-service/src/server.ts` |
 | §5 income/expense summary, §7 timeseries | `reports/flows.ts` (range `from`/`to` in the request tz; `from=all` = since first transaction) |
+| Reports tab | `reports/custom.ts` (filters on top of the shared money-flow rules; the dashboard's `src/reports.ts` builds the query and the diverging chart rows) |
 | §5 tags | `reports/tags.ts` (per-tag totals + per-bucket tag sets; the dashboard's `src/tags.ts` stacks them per tag and per combination, without double counting) |
 | Payees | route exists and returns `501` until implemented in `reports/` |
 

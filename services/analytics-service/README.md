@@ -19,6 +19,7 @@ npm test -w @ivy/analytics-service
 | `src/reports/index.ts` | Transactions table, balances / net worth |
 | `src/reports/flows.ts` | Income/expense summary and timeseries (buckets, groupBy, gap filling) |
 | `src/reports/tags.ts` | Per-tag totals and bucketed money per exact tag set |
+| `src/reports/custom.ts` | The Reports tab: filtered income/expense per bucket, optional category/account split |
 | `src/server.ts` | Fastify routes, `{ baseCurrency, tz, ratesUsed, warnings, data }` envelope |
 
 Env: `PORT`, `MAX_BACKUP_BYTES`, `DATASET_CACHE_SIZE`, `DATASET_TTL_MS`, `RATES_TTL_MS`, `ECB_URL`, `FALLBACK_RATES_URL`.

@@ -1,7 +1,7 @@
 /**
  * Report builders: pure functions (dataset, params, rates) -> contract shapes.
  * Here: transactions table, balances/net worth, and the money-flow rules every other report shares.
- * Elsewhere in reports/: flows (summary, timeseries), budgets, planned, projection, tags. TODO: payees (plan section 7).
+ * Elsewhere in reports/: flows (summary, timeseries), budgets, planned, projection, tags, custom. TODO: payees (plan section 7).
  */
 import type { AccountBalance, BalancesData, TransactionRow } from '@ivy/contracts';
 import { computeBalances } from '../engine/balances';

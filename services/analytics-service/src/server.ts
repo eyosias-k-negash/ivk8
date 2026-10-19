@@ -10,6 +10,7 @@ import { budgetTimeseriesReport, budgetsList } from './reports/budgets';
 import { plannedReport } from './reports/planned';
 import { MAX_WINDOW, parseWindow, projectionReport } from './reports/projection';
 import { tagsReport } from './reports/tags';
+import { customReport, parseCustomFilters } from './reports/custom';
 import { balancesReport, currenciesInUse, transactionsTable } from './reports';
 import {
   RangeTooLarge,
@@ -215,6 +216,19 @@ export function buildApp(deps: AppDeps = {}): FastifyInstance {
       if (!granularity) throw new BadRequest('granularity must be DAY, WEEK, MONTH or YEAR');
       const { from, to } = range(ds, q);
       return tagsReport(ds, from, to, granularity, q.tz as string, r);
+    }),
+  );
+
+  /** The Reports tab: income and expense of the transactions passing the filters (see reports/custom.ts). */
+  app.get<Q>('/datasets/:key/custom-report', (req, reply) =>
+    withDataset(req.params.key, req.query, reply, (ds, r, q) => {
+      const granularity = parseGranularity(q.granularity);
+      if (!granularity) throw new BadRequest('granularity must be DAY, WEEK, MONTH or YEAR');
+      const groupBy = parseGroupBy(q.groupBy);
+      if (!groupBy) throw new BadRequest('groupBy must be none, category or account');
+      const filters = parseCustomFilters(q);
+      const { from, to } = range(ds, q);
+      return customReport(ds, from, to, granularity, groupBy, filters, q.tz as string, r);
     }),
   );
 

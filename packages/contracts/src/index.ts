@@ -328,6 +328,81 @@ export interface TagsData {
   unconverted: string[];
 }
 
+/**
+ * Filters of the Reports tab, as query params of `/custom-report`. Lists are comma-separated; an absent filter
+ * restricts nothing. A transaction must pass every filter given.
+ */
+export interface CustomReportParams {
+  /** Account ids: the side included in the balance is one of them (see SummaryData.byAccount). */
+  accounts?: string;
+  /** Flow ids, as in the category breakdown: category ids, "uncategorized", or "transfer:<from>><to>". */
+  categories?: string;
+  /** Tag ids: the transaction carries at least one. */
+  tags?: string;
+  /** Tag ids: the transaction carries none. Wins over `tags`. */
+  excludeTags?: string;
+  /** Words: its title or description contains at least one (case-insensitive). */
+  keywords?: string;
+  /** Words: its title and description contain none. Wins over `keywords`. */
+  excludeKeywords?: string;
+  /** Inclusive bounds on the amount counted, in base currency. */
+  minAmount?: string;
+  maxAmount?: string;
+}
+
+export interface CustomReportOption {
+  id: string;
+  name: string;
+}
+
+export interface CustomReportGroup extends CustomReportOption {
+  /** Matching money into / out of net worth in the range (base currency). */
+  income: number;
+  expense: number;
+}
+
+export interface CustomReportBucket {
+  bucket: string;
+  income: number;
+  expense: number;
+  /** With groupBy != none: per group id (absent = nothing). Empty with groupBy = none. */
+  incomeBy: Record<string, number>;
+  expenseBy: Record<string, number>;
+  count: number;
+}
+
+export interface CustomReportData {
+  from: number;
+  to: number;
+  granularity: Granularity;
+  groupBy: GroupBy;
+  /** What the filters can choose from, whatever the range and filters: */
+  options: {
+    /** Accounts included in the balance, the only ones money is filed under. */
+    accounts: (CustomReportOption & { currency: string })[];
+    /**
+     * Live categories, then "Uncategorized", then every other flow id money has ever been filed under: uncategorized
+     * transfer pairs, and categories since deleted.
+     */
+    categories: CustomReportOption[];
+    /** Live tags. */
+    tags: CustomReportOption[];
+  };
+  /** Matching money in the range, by the same rules as SummaryData. */
+  income: number;
+  expense: number;
+  net: number;
+  count: number;
+  /** With groupBy != none: every group with matching money, largest first (income + expense). */
+  groups: CustomReportGroup[];
+  /** Every bucket in the range, empty ones included. */
+  buckets: CustomReportBucket[];
+  /** The matching transactions, for listing them. */
+  transactionIds: string[];
+  /** Currencies left out because no rate was available (so neither their amount nor its bounds could be judged). */
+  unconverted: string[];
+}
+
 export interface PayeeRow {
   title: string;
   expense: number;

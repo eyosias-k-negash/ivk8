@@ -29,6 +29,7 @@ Code lives in `services/analytics-service/` (monorepo rescaffold, see ARCHITECTU
 | Reports: transactions table, balances / net worth | done |
 | Reports: summary + timeseries (by category / account, day/week/month/year, gap-filled, tz-aware) + dashboard views | done, tested (2026-10-02) |
 | Reports: budgets, planned, projection, tags (Tier 1) | done, tested (tags 2026-10-13) |
+| Reports: custom report behind the Reports tab | done, tested (2026-10-19) |
 | Reports: payees (Tier 1) | route returns `501`; next |
 | Sanity check + golden test on a real backup | not started |
 
@@ -136,6 +137,7 @@ Only drive-sync calls these; the browser reaches the same reports as `/api/backu
 | `GET /datasets/:key/budgets?date=` *(Tier 1)* | Budget status list |
 | `GET /datasets/:key/planned` *(Tier 1)* | Overdue and upcoming planned transactions |
 | `GET /datasets/:key/tags?from=&to=&granularity=` *(Tier 1)* | Per-tag totals, plus bucketed money per exact tag set |
+| `GET /datasets/:key/custom-report?from=&to=&granularity=&groupBy=&accounts=&categories=&tags=&excludeTags=&keywords=&excludeKeywords=&minAmount=&maxAmount=` | Income and expense per bucket for the transactions passing every filter (lists comma-separated), optional category/account split, the filter options, and the matching transaction ids |
 | `GET /datasets/:key/payees` *(Tier 1)* | Top payees |
 
 Every report accepts `tz` (default `+03:00`) and `rateOverrides`, and returns `{ baseCurrency, tz, ratesUsed, warnings, data }`.
