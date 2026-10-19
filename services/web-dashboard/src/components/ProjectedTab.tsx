@@ -55,6 +55,19 @@ function rankSeries(kind: Kind, totals: Map<string, number>, names: Map<string, 
   return out;
 }
 
+/** Which kinds keep their "Other" series; unchecked, it is left out of the chart, table and totals. */
+type OtherShown = Record<Kind, boolean>;
+const isOther = (s: Series) => s.key === `${s.kind}:${OTHER}`;
+
+/** The view minus the "Other" series that are unchecked (their row values stay but no bar, sum or tooltip line reads them). */
+function dropOther(view: View, shown: OtherShown): View {
+  return {
+    ...view,
+    income: shown.income ? view.income : view.income.filter((s) => !isOther(s)),
+    expense: shown.expense ? view.expense : view.expense.filter((s) => !isOther(s)),
+  };
+}
+
 /** Adds per-category amounts to `row` under their series keys, after `prefix`. */
 function addAmounts(row: Row, kind: Kind, amounts: Record<string, number>, known: Set<string>, prefix = '') {
   for (const [id, v] of Object.entries(amounts)) {
@@ -362,11 +375,13 @@ export function ProjectedTab({ fileId }: { fileId: string }) {
 
 function PlannedProjection({ fileId, range, granularity }: { fileId: string; range: DateRange; granularity: Granularity }) {
   const r = useReport<PlannedData>(fileId, 'planned', { from: range.from, to: range.to, granularity });
-  const view = useMemo(() => (r.data ? shapePlanned(r.data.data) : null), [r.data]);
+  const full = useMemo(() => (r.data ? shapePlanned(r.data.data) : null), [r.data]);
+  const [shown, setShown] = useState<OtherShown>({ income: true, expense: true });
+  const view = useMemo(() => (full ? dropOther(full, shown) : null), [full, shown]);
 
   if (r.error) return <ErrorBox error={r.error} />;
   const last = r.data?.data.buckets.at(-1);
-  if (!r.data || !view || !last) return <p className="muted">Loading…</p>;
+  if (!r.data || !full || !view || !last) return <p className="muted">Loading…</p>;
   const base = r.data.baseCurrency;
   const incomeTotal = view.income.reduce((s, x) => s + x.total, 0);
   const expenseTotal = view.expense.reduce((s, x) => s + x.total, 0);
@@ -398,8 +413,8 @@ function PlannedProjection({ fileId, range, granularity }: { fileId: string; ran
           <Line key="nw" yAxisId="nw" dataKey={NET_WORTH} name="Projected net worth" type="natural" stroke="var(--fg)" strokeWidth={2} dot={{ r: 3, fill: 'var(--fg)' }} isAnimationActive={false} />,
         ]}
       />
-      <CategoryLegend title="Planned income" series={view.income} total={incomeTotal} base={base} />
-      <CategoryLegend title="Planned expenses" series={view.expense} total={expenseTotal} base={base} />
+      <CategoryLegend title="Planned income" series={full.income} total={incomeTotal} base={base} otherShown={shown.income} onToggleOther={() => setShown((o) => ({ ...o, income: !o.income }))} />
+      <CategoryLegend title="Planned expenses" series={full.expense} total={expenseTotal} base={base} otherShown={shown.expense} onToggleOther={() => setShown((o) => ({ ...o, expense: !o.expense }))} />
       <FlowTable view={view} base={base} />
     </>
   );
@@ -412,10 +427,12 @@ const basisOf = (row: Row, view: View) =>
 
 function AverageProjection({ fileId, to, granularity, lookback }: { fileId: string; to: string; granularity: Granularity; lookback: number }) {
   const r = useReport<ProjectionData>(fileId, 'projection', { to, granularity, window: String(lookback) });
-  const view = useMemo(() => (r.data ? shapeAverage(r.data.data) : null), [r.data]);
+  const full = useMemo(() => (r.data ? shapeAverage(r.data.data) : null), [r.data]);
+  const [shown, setShown] = useState<OtherShown>({ income: true, expense: true });
+  const view = useMemo(() => (full ? dropOther(full, shown) : null), [full, shown]);
 
   if (r.error) return <ErrorBox error={r.error} />;
-  if (!r.data || !view) return <p className="muted">Loading…</p>;
+  if (!r.data || !full || !view) return <p className="muted">Loading…</p>;
   const base = r.data.baseCurrency;
   const d = r.data.data;
   const unit = UNIT[granularity];
@@ -487,14 +504,22 @@ function AverageProjection({ fileId, to, granularity, lookback }: { fileId: stri
           <Line key="actual" yAxisId="nw" dataKey={NW_ACTUAL} name="Net worth" type="natural" stroke="var(--fg)" strokeWidth={2} dot={{ r: 3, fill: 'var(--fg)' }} isAnimationActive={false} />,
         ]}
       />
-      <CategoryLegend title={`Average income per ${unit}`} series={view.income} total={incomeAvg} base={base} />
-      <CategoryLegend title={`Average expenses per ${unit}`} series={view.expense} total={expenseAvg} base={base} />
+      <CategoryLegend title={`Average income per ${unit}`} series={full.income} total={incomeAvg} base={base} otherShown={shown.income} onToggleOther={() => setShown((o) => ({ ...o, income: !o.income }))} />
+      <CategoryLegend title={`Average expenses per ${unit}`} series={full.expense} total={expenseAvg} base={base} otherShown={shown.expense} onToggleOther={() => setShown((o) => ({ ...o, expense: !o.expense }))} />
       <FlowTable view={view} base={base} basis={(row) => basisOf(row, view)} />
     </>
   );
 }
 
-function CategoryLegend({ title, series, total, base }: { title: string; series: Series[]; total: number; base: string }) {
+function CategoryLegend({ title, series, total, base, otherShown, onToggleOther }: {
+  title: string;
+  series: Series[];
+  /** Total of what the chart shows, i.e. without "Other" when it is unchecked. */
+  total: number;
+  base: string;
+  otherShown: boolean;
+  onToggleOther: () => void;
+}) {
   if (!series.length) return null;
   return (
     <fieldset className="pick-legend">
@@ -502,12 +527,21 @@ function CategoryLegend({ title, series, total, base }: { title: string; series:
       <ul>
         {series.map((s) => (
           <li key={s.key}>
-            <span className="pick-item">
-              <span className="swatch solid" style={{ ['--c' as string]: s.color }} aria-hidden />
-              <span className="name" title={s.label}>{s.label}</span>
-              <span className="num muted">{fmtMoney(s.total, base)}</span>
-              <span className="num pct">{fmtPct(s.total, total)}</span>
-            </span>
+            {isOther(s) ? (
+              <label>
+                <input type="checkbox" checked={otherShown} onChange={onToggleOther} style={{ accentColor: s.color }} />
+                <span className="name" title={s.label}>{s.label}</span>
+                <span className="num muted">{fmtMoney(s.total, base)}</span>
+                <span className="num pct">{otherShown ? fmtPct(s.total, total) : ''}</span>
+              </label>
+            ) : (
+              <span className="pick-item">
+                <span className="swatch solid" style={{ ['--c' as string]: s.color }} aria-hidden />
+                <span className="name" title={s.label}>{s.label}</span>
+                <span className="num muted">{fmtMoney(s.total, base)}</span>
+                <span className="num pct">{fmtPct(s.total, total)}</span>
+              </span>
+            )}
           </li>
         ))}
       </ul>

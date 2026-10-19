@@ -238,6 +238,8 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
   // The user's picks belong to the split they were made for: changing "Split by" (or Reset) falls
   // back to the defaults (top groups by total). Range, metric and interval changes keep them.
   const [custom, setCustom] = useState<{ groupBy: GroupBy; picks: Picks } | null>(null);
+  // Unchecking "Other" leaves the unpicked groups out of the chart instead of folding them into it.
+  const [showOther, setShowOther] = useState(true);
   const groups = useMemo(() => (r.data ? groupTotals(r.data.data, metric) : []), [r.data, metric]);
   const picks = useMemo<Picks>(
     () =>
@@ -260,9 +262,9 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
 
   const view = useMemo(() => {
     if (!r.data) return null;
-    const v = shape(r.data.data, metric, groups, picks);
+    const v = shape(r.data.data, metric, groups, picks, showOther);
     return { ...v, rows: withAverage(v) };
-  }, [r.data, metric, groups, picks]);
+  }, [r.data, metric, groups, picks, showOther]);
 
   return (
     <>
@@ -348,7 +350,18 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
             </ResponsiveContainer>
           </div>
           {view.stacked && (
-            <PickLegend groups={groups} picks={picks} base={r.data.baseCurrency} onToggle={toggle} onReset={() => setCustom(null)} />
+            <PickLegend
+              groups={groups}
+              picks={picks}
+              base={r.data.baseCurrency}
+              showOther={showOther}
+              onToggleOther={() => setShowOther((v) => !v)}
+              onToggle={toggle}
+              onReset={() => {
+                setCustom(null);
+                setShowOther(true);
+              }}
+            />
           )}
           {/* Table view: the accessible/precise counterpart of the chart. */}
           <details>
@@ -402,7 +415,7 @@ function groupTotals(d: TimeseriesData, metric: Metric): Group[] {
 }
 
 /** Pivot API points into chart rows. Grouped views show the picked groups and fold the rest into "Other". */
-function shape(d: TimeseriesData, metric: Metric, groups: Group[], picks: Picks): View {
+function shape(d: TimeseriesData, metric: Metric, groups: Group[], picks: Picks, showOther: boolean): View {
   if (d.groupBy === 'none') {
     return {
       title: 'Income and expense',
@@ -420,6 +433,7 @@ function shape(d: TimeseriesData, metric: Metric, groups: Group[], picks: Picks)
     const row = rowsByBucket.get(p.bucket) ?? { bucket: p.bucket };
     const id = p.groupId ?? '?';
     const key = picks.has(id) ? id : '__other';
+    if (key === '__other' && !showOther) continue;
     row[key] = Number(row[key] ?? 0) + p[metric];
     rowsByBucket.set(p.bucket, row);
   }
@@ -428,7 +442,7 @@ function shape(d: TimeseriesData, metric: Metric, groups: Group[], picks: Picks)
   const series = groups
     .filter((g) => picks.has(g.id))
     .map((g) => ({ key: g.id, label: g.name, color: SERIES[picks.get(g.id)!.slot]! }));
-  if (groups.some((g) => !picks.has(g.id))) series.push({ key: '__other', label: 'Other', color: 'var(--viz-muted)' });
+  if (showOther && groups.some((g) => !picks.has(g.id))) series.push({ key: '__other', label: 'Other', color: 'var(--viz-muted)' });
 
   return {
     title: metric === 'expense' ? 'Expense' : 'Income',
@@ -458,11 +472,13 @@ function rowTotal(row: Record<string, string | number> | undefined, view: View):
   return row ? view.series.reduce((sum, s) => sum + Number(row[s.key] ?? 0), 0) : 0;
 }
 
-/** Checkbox legend for grouped views: checked groups get their own color, unchecked ones fold into "Other". */
-function PickLegend({ groups, picks, base, onToggle, onReset }: {
+/** Checkbox legend for grouped views: checked groups get their own color, unchecked ones fold into "Other" (itself optional). */
+function PickLegend({ groups, picks, base, showOther, onToggleOther, onToggle, onReset }: {
   groups: Group[];
   picks: Picks;
   base: string;
+  showOther: boolean;
+  onToggleOther: () => void;
   onToggle: (g: Group) => void;
   onReset: () => void;
 }) {
@@ -504,7 +520,7 @@ function PickLegend({ groups, picks, base, onToggle, onReset }: {
         {other > 0 && (
           <li>
             <label>
-              <span className="swatch" aria-hidden />
+              <input type="checkbox" checked={showOther} onChange={onToggleOther} style={{ accentColor: 'var(--viz-muted)' }} />
               <span className="name">Other</span>
               <span className="num muted">{fmtMoney(other, base)}</span>
               <span className="num pct">{fmtPct(other, whole)}</span>

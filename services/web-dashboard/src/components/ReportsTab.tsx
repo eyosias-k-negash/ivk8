@@ -93,6 +93,8 @@ export function ReportsTab({ fileId, range, config, onChange }: {
       custom?.groupBy === split ? custom.picks : new Map(groups.slice(0, DEFAULT_PICKS).map((g, i) => [g.id, { slot: i, name: g.name }])),
     [custom, split, groups],
   );
+  // Unchecking "Other" leaves the unpicked groups out of the chart instead of folding them into it.
+  const [showOther, setShowOther] = useState(true);
   const toggle = (g: CustomReportOption) => {
     const next = new Map(picks);
     if (next.has(g.id)) next.delete(g.id);
@@ -105,7 +107,7 @@ export function ReportsTab({ fileId, range, config, onChange }: {
     setCustom({ groupBy: split, picks: next });
   };
 
-  const view = useMemo(() => (data ? shapeReport(data, new Set(picks.keys())) : null), [data, picks]);
+  const view = useMemo(() => (data ? shapeReport(data, new Set(picks.keys()), showOther) : null), [data, picks, showOther]);
   const series = useMemo<Colored[]>(
     () =>
       (view?.series ?? []).map((s) => ({
@@ -170,7 +172,19 @@ export function ReportsTab({ fileId, range, config, onChange }: {
               <ReportChart view={view} series={series} base={base} unit={unit} showNet={config.showNet} />
               <ChartKey series={series} showNet={config.showNet} split={split !== 'none'} />
               {split !== 'none' && (
-                <GroupLegend groups={groups} picks={picks} base={base} noun={split} onToggle={toggle} onReset={() => setCustom(null)} />
+                <GroupLegend
+                  groups={groups}
+                  picks={picks}
+                  base={base}
+                  noun={split}
+                  showOther={showOther}
+                  onToggleOther={() => setShowOther((v) => !v)}
+                  onToggle={toggle}
+                  onReset={() => {
+                    setCustom(null);
+                    setShowOther(true);
+                  }}
+                />
               )}
               <ReportTable view={view} series={series} base={base} split={split !== 'none'} />
             </>
@@ -654,13 +668,15 @@ function ChartKey({ series, showNet, split }: { series: Colored[]; showNet: bool
 
 /**
  * Checkbox legend for a split report: checked groups get their own color on both sides, unchecked ones fold into
- * "Other". Each row shows the group's money in and out under the current filters.
+ * "Other", which can be unchecked to leave them out. Each row shows the group's money in and out under the current filters.
  */
-function GroupLegend({ groups, picks, base, noun, onToggle, onReset }: {
+function GroupLegend({ groups, picks, base, noun, showOther, onToggleOther, onToggle, onReset }: {
   groups: CustomReportGroup[];
   picks: Picks;
   base: string;
   noun: GroupBy;
+  showOther: boolean;
+  onToggleOther: () => void;
   onToggle: (g: CustomReportOption) => void;
   onReset: () => void;
 }) {
@@ -705,11 +721,11 @@ function GroupLegend({ groups, picks, base, noun, onToggle, onReset }: {
         })}
         {rest.length > 0 && (
           <li>
-            <span className="pick-item">
-              <span className="swatch" aria-hidden />
+            <label>
+              <input type="checkbox" checked={showOther} onChange={onToggleOther} style={{ accentColor: FOLDED_COLOR }} />
               <span className="name">Other ({rest.length})</span>
               {amounts({ income: rest.reduce((s, g) => s + g.income, 0), expense: rest.reduce((s, g) => s + g.expense, 0) })}
-            </span>
+            </label>
           </li>
         )}
       </ul>

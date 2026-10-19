@@ -21,7 +21,7 @@ interface Series {
 type Row = { bucket: string; threshold: number } & Record<string, string | number>;
 
 /** Chart rows (one per period, then the dimmed average) and the legend series, from the API buckets. */
-function shape(d: BudgetTimeseriesData): { series: Series[]; rows: Row[] } {
+function shape(d: BudgetTimeseriesData, showOther: boolean): { series: Series[]; rows: Row[]; other: Series | null } {
   const totals = new Map(d.budget.categories.map((c) => [c.id, 0]));
   for (const b of d.buckets) for (const [id, v] of Object.entries(b.spent)) totals.set(id, (totals.get(id) ?? 0) + v);
 
@@ -31,18 +31,22 @@ function shape(d: BudgetTimeseriesData): { series: Series[]; rows: Row[] } {
   const named = ranked.length > SERIES.length ? ranked.slice(0, MAX_NAMED) : ranked;
   const folded = new Set(ranked.slice(named.length).map((c) => c.id));
   const series: Series[] = named.map((c, i) => ({ key: c.id, label: c.name, color: SERIES[i]!, total: c.total }));
-  if (folded.size)
-    series.push({
-      key: OTHER,
-      label: `Other (${folded.size})`,
-      color: 'var(--viz-muted)',
-      total: ranked.slice(named.length).reduce((s, c) => s + c.total, 0),
-    });
+  const other: Series | null = folded.size
+    ? {
+        key: OTHER,
+        label: `Other (${folded.size})`,
+        color: 'var(--viz-muted)',
+        total: ranked.slice(named.length).reduce((s, c) => s + c.total, 0),
+      }
+    : null;
+  // Unchecked, "Other" is left out of the chart, its table column and the totals.
+  if (other && showOther) series.push(other);
 
   const rows: Row[] = d.buckets.map((b) => {
     const row: Row = { bucket: b.bucket, threshold: b.threshold };
     for (const [id, v] of Object.entries(b.spent)) {
       const key = folded.has(id) ? OTHER : id;
+      if (key === OTHER && !showOther) continue;
       row[key] = Number(row[key] ?? 0) + v;
     }
     return row;
@@ -55,7 +59,7 @@ function shape(d: BudgetTimeseriesData): { series: Series[]; rows: Row[] } {
     for (const s of series) avg[s.key] = rows.reduce((sum, r) => sum + Number(r[s.key] ?? 0), 0) / n;
     rows.push(avg);
   }
-  return { series, rows };
+  return { series, rows, other };
 }
 
 const rowTotal = (row: Row, series: Series[]) => series.reduce((s, x) => s + Number(row[x.key] ?? 0), 0);
@@ -146,7 +150,8 @@ export function BudgetsTab({ fileId, range }: { fileId: string; range: DateRange
     { budgetId, from: range.from, to: range.to, granularity },
     !!budgetId,
   );
-  const view = useMemo(() => (r.data && r.data.data.budget.id === budgetId ? shape(r.data.data) : null), [r.data, budgetId]);
+  const [showOther, setShowOther] = useState(true);
+  const view = useMemo(() => (r.data && r.data.data.budget.id === budgetId ? shape(r.data.data, showOther) : null), [r.data, budgetId, showOther]);
 
   if (list.error) return <ErrorBox error={list.error} />;
   if (!list.data) return <p className="muted">Loading…</p>;
@@ -228,7 +233,7 @@ export function BudgetsTab({ fileId, range }: { fileId: string; range: DateRange
           <fieldset className="pick-legend">
             <legend>Budget categories</legend>
             <ul>
-              {view.series.map((s) => (
+              {view.series.filter((s) => s.key !== OTHER).map((s) => (
                 <li key={s.key}>
                   <span className="pick-item">
                     <span className="swatch solid" style={{ ['--c' as string]: s.color }} aria-hidden />
@@ -238,6 +243,16 @@ export function BudgetsTab({ fileId, range }: { fileId: string; range: DateRange
                   </span>
                 </li>
               ))}
+              {view.other && (
+                <li>
+                  <label>
+                    <input type="checkbox" checked={showOther} onChange={() => setShowOther((v) => !v)} style={{ accentColor: 'var(--viz-muted)' }} />
+                    <span className="name">{view.other.label}</span>
+                    <span className="num muted">{fmtMoney(view.other.total, base)}</span>
+                    {showOther && <span className="num pct">{fmtPct(view.other.total, grand)}</span>}
+                  </label>
+                </li>
+              )}
             </ul>
           </fieldset>
           <details>

@@ -221,9 +221,10 @@ const SIDES: Side[] = ['income', 'expense'];
 
 /**
  * Chart data. Unsplit, each side is one series. Split, each picked group gets a series on each side it has money
- * on, largest nearest the zero line, and the unpicked groups fold into one "Other" per side, outermost.
+ * on, largest nearest the zero line, and the unpicked groups fold into one "Other" per side, outermost
+ * (or are left out altogether when `showOther` is off).
  */
-export function shapeReport(d: CustomReportData, picked: ReadonlySet<string>): ReportView {
+export function shapeReport(d: CustomReportData, picked: ReadonlySet<string>, showOther = true): ReportView {
   const series: ReportSeries[] = [];
   if (d.groupBy === 'none') {
     series.push({ key: keyOf('income', ALL), side: 'income', group: ALL, label: 'Income', total: d.income });
@@ -233,7 +234,7 @@ export function shapeReport(d: CustomReportData, picked: ReadonlySet<string>): R
       const own = d.groups.filter((g) => picked.has(g.id) && g[side] > 0).sort((a, b) => b[side] - a[side]);
       for (const g of own) series.push({ key: keyOf(side, g.id), side, group: g.id, label: g.name, total: g[side] });
       const rest = d.groups.filter((g) => !picked.has(g.id) && g[side] > 0);
-      if (rest.length)
+      if (showOther && rest.length)
         series.push({
           key: keyOf(side, OTHER),
           side,
@@ -247,6 +248,7 @@ export function shapeReport(d: CustomReportData, picked: ReadonlySet<string>): R
   const sign = (side: Side) => (side === 'income' ? 1 : -1);
   const add = (row: ReportRow, side: Side, amounts: Record<string, number>) => {
     for (const [id, v] of Object.entries(amounts)) {
+      if (!showOther && !picked.has(id)) continue;
       const key = keyOf(side, picked.has(id) ? id : OTHER);
       row[key] = cents(Number(row[key] ?? 0) + sign(side) * v);
     }
