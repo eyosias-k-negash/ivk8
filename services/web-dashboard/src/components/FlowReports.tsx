@@ -37,6 +37,81 @@ export function presetRange(preset: 'thisMonth' | 'lastMonth' | 'thisYear' | 'al
   }
 }
 
+export type RangeUnit = 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
+const UNIT_LABEL: Record<RangeUnit, string> = { DAY: 'days', WEEK: 'weeks', MONTH: 'months', YEAR: 'years' };
+
+/** Shifts a date by n units (negative = back); months and years keep the day-of-month, clamped to the month's end. */
+function shift(d: Date, n: number, unit: RangeUnit): Date {
+  const out = new Date(d);
+  if (unit === 'DAY' || unit === 'WEEK') {
+    out.setUTCDate(out.getUTCDate() + n * (unit === 'WEEK' ? 7 : 1));
+    return out;
+  }
+  const months = unit === 'YEAR' ? n * 12 : n;
+  out.setUTCDate(1);
+  out.setUTCMonth(out.getUTCMonth() + months);
+  const last = new Date(Date.UTC(out.getUTCFullYear(), out.getUTCMonth() + 1, 0)).getUTCDate();
+  out.setUTCDate(Math.min(d.getUTCDate(), last));
+  return out;
+}
+
+/** The n units ending today ("last 3 months" = the 3 months back from today, today included). */
+export function lastRange(n: number, unit: RangeUnit, tz: string): DateRange {
+  const t = localToday(tz);
+  return { from: iso(shift(shift(t, -n, unit), 1, 'DAY')), to: iso(t) };
+}
+
+/** The n units starting today, for projections. */
+export function nextRange(n: number, unit: RangeUnit, tz: string): DateRange {
+  const t = localToday(tz);
+  return { from: iso(t), to: iso(shift(shift(t, n, unit), -1, 'DAY')) };
+}
+
+/** "Last/Next [x] [interval]": a whole number and any interval, applied as soon as both are valid. */
+export function RelativeRange({ mode, onPick }: { mode: 'last' | 'next'; onPick: (r: DateRange) => void }) {
+  const { tz } = useParams();
+  const [text, setText] = useState('3');
+  const [unit, setUnit] = useState<RangeUnit>('MONTH');
+  const apply = (t: string, u: RangeUnit) => {
+    const n = Number(t);
+    if (Number.isInteger(n) && n >= 1 && n <= 1000) onPick((mode === 'last' ? lastRange : nextRange)(n, u, tz));
+  };
+  const n = Number(text);
+  const bad = !(Number.isInteger(n) && n >= 1 && n <= 1000);
+  return (
+    <span className="range-inputs">
+      {mode === 'last' ? 'Last' : 'Next'}
+      <input
+        type="number"
+        min={1}
+        max={1000}
+        step={1}
+        value={text}
+        aria-label={`${mode} how many`}
+        aria-invalid={bad}
+        style={{ width: '4.5em' }}
+        onChange={(e) => {
+          setText(e.target.value);
+          apply(e.target.value, unit);
+        }}
+      />
+      <select
+        value={unit}
+        aria-label="interval"
+        onChange={(e) => {
+          setUnit(e.target.value as RangeUnit);
+          apply(text, e.target.value as RangeUnit);
+        }}
+      >
+        {(Object.keys(UNIT_LABEL) as RangeUnit[]).map((u) => (
+          <option key={u} value={u}>{UNIT_LABEL[u]}</option>
+        ))}
+      </select>
+      <button className="link" disabled={bad} onClick={() => apply(text, unit)}>Apply</button>
+    </span>
+  );
+}
+
 export function RangePicker({ value, onChange }: { value: DateRange; onChange: (r: DateRange) => void }) {
   const { tz } = useParams();
   return (
@@ -53,6 +128,7 @@ export function RangePicker({ value, onChange }: { value: DateRange; onChange: (
           {{ thisMonth: 'This month', lastMonth: 'Last month', thisYear: 'This year', all: 'All time' }[p]}
         </button>
       ))}
+      <RelativeRange mode="last" onPick={onChange} />
     </div>
   );
 }

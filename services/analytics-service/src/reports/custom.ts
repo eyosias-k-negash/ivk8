@@ -7,15 +7,18 @@
  *   expense on accounts included in the balance, and transfers to or from an excluded account, filed under the
  *   included side and under their category (or their two accounts when they have none). Income and expense on an
  *   excluded account, and transfers between two included accounts, never count, whatever the filters.
- * - Filters are optional and all must pass: the included side is one of `accounts`; the flow id the category
- *   breakdown files it under is one of `categories`; it carries one of `tags` and none of `excludeTags`; its title or
- *   description contains one of `keywords` and none of `excludeKeywords` (case-insensitive); its base amount, to the
- *   cent, lies within [minAmount, maxAmount]. Unknown ids match nothing rather than failing, so a filter made
- *   against another backup still runs.
- * - Range is [from, to) on dateTime, bucketed in the request timezone. Amounts are in base at the current rate; a
- *   currency with no rate can be neither bounded nor totalled, so it is left out and listed in `unconverted`.
+ * - Scope: the included side is one of `accounts`, and the flow id the category breakdown files it under is one of
+ *   `categories`. Unknown ids match nothing rather than failing, so a filter made against another backup still runs.
+ * - Rules: a tree of conditions on tags, words in the title or description (any case) and the base amount (to the
+ *   cent, bounds inclusive), joined by all/any per group (see CustomReportRule). An empty group matches everything.
+ * - Range is [from, to) on dateTime, bucketed in the request timezone. Amounts are in base at the current rate. A
+ *   currency with no rate can't be totalled, nor tested against an amount condition, so its transactions are left
+ *   out; the currency is listed in `unconverted` when one of them matches, or might if its amount were known.
  */
-import type { CustomReportBucket, CustomReportData, CustomReportGroup, CustomReportOption, Granularity, GroupBy } from '@ivy/contracts';
+import type {
+  CustomReportBucket, CustomReportData, CustomReportGroup, CustomReportOption, CustomReportRule, CustomReportRuleGroup,
+  Granularity, GroupBy,
+} from '@ivy/contracts';
 import type { RateTable } from '../engine/currency';
 import type { Dataset } from '../engine/loader';
 import { classify } from '../engine/rules';
@@ -25,16 +28,16 @@ import { BadRequest } from '../params';
 import { flowOf, moneyFlow } from './index';
 import { bucketKeys } from './flows';
 
+/** Conditions plus groups, root included; keeps a request from asking for unbounded work. */
+export const MAX_RULES = 50;
+/** The root group is level 1. */
+export const MAX_DEPTH = 3;
+
 export interface CustomFilters {
   accounts?: ReadonlySet<string>;
   categories?: ReadonlySet<string>;
-  tags?: ReadonlySet<string>;
-  excludeTags?: ReadonlySet<string>;
-  /** Lower-cased. */
-  keywords?: string[];
-  excludeKeywords?: string[];
-  minAmount?: number;
-  maxAmount?: number;
+  /** Text conditions' words are lower-cased. */
+  rules?: CustomReportRuleGroup;
 }
 
 const round = (n: number) => Math.round(n * 100) / 100;
@@ -49,11 +52,58 @@ function list(v: unknown): string[] | undefined {
   return items.length ? items : undefined;
 }
 
-function bound(v: unknown, name: string): number | undefined {
+const strings = (v: unknown, what: string): string[] => {
+  const items = Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string').map((s) => s.trim()).filter(Boolean) : [];
+  if (!items.length) throw new BadRequest(`a ${what} rule needs at least one entry`);
+  return items;
+};
+
+const bound = (v: unknown, name: string): number | undefined => {
+  if (v === undefined) return undefined;
+  if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) throw new BadRequest(`an amount rule's ${name} must be a number of 0 or more`);
+  return v;
+};
+
+/** Validates the JSON rule tree and normalizes it: trimmed entries, lower-cased words. */
+export function parseRules(v: unknown): CustomReportRuleGroup | undefined {
   if (v == null || v === '') return undefined;
-  const n = Number(v);
-  if (!Number.isFinite(n) || n < 0) throw new BadRequest(`${name} must be a number of 0 or more`);
-  return n;
+  let json: unknown;
+  try {
+    json = JSON.parse(String(v));
+  } catch {
+    throw new BadRequest('rules must be JSON');
+  }
+  let count = 0;
+  const rule = (r: unknown, depth: number): CustomReportRule => {
+    if (++count > MAX_RULES) throw new BadRequest(`rules may hold at most ${MAX_RULES} conditions and groups`);
+    if (!r || typeof r !== 'object' || Array.isArray(r)) throw new BadRequest('each rule must be an object');
+    const o = r as Record<string, unknown>;
+    switch (o.kind) {
+      case 'group':
+        if (depth > MAX_DEPTH) throw new BadRequest(`groups nest at most ${MAX_DEPTH} levels deep`);
+        if (o.match !== 'all' && o.match !== 'any') throw new BadRequest("a group's match must be all or any");
+        if (!Array.isArray(o.rules)) throw new BadRequest('a group needs a rules list');
+        return { kind: 'group', match: o.match, rules: o.rules.map((c) => rule(c, depth + 1)) };
+      case 'tags':
+        if (o.op !== 'any' && o.op !== 'all' && o.op !== 'none') throw new BadRequest("a tags rule's op must be any, all or none");
+        return { kind: 'tags', op: o.op, tagIds: strings(o.tagIds, 'tags') };
+      case 'text':
+        if (o.op !== 'contains' && o.op !== 'excludes') throw new BadRequest("a text rule's op must be contains or excludes");
+        return { kind: 'text', op: o.op, words: strings(o.words, 'text').map((w) => w.toLowerCase()) };
+      case 'amount': {
+        const min = bound(o.min, 'min');
+        const max = bound(o.max, 'max');
+        if (min === undefined && max === undefined) throw new BadRequest('an amount rule needs a min or a max');
+        if (min !== undefined && max !== undefined && min > max) throw new BadRequest("an amount rule's min must not be more than its max");
+        return { kind: 'amount', ...(min !== undefined && { min }), ...(max !== undefined && { max }) };
+      }
+      default:
+        throw new BadRequest('a rule must be a group, tags, text or amount');
+    }
+  };
+  const root = rule(json, 1);
+  if (root.kind !== 'group') throw new BadRequest('rules must be a group');
+  return root;
 }
 
 export function parseCustomFilters(q: Record<string, unknown>): CustomFilters {
@@ -61,44 +111,56 @@ export function parseCustomFilters(q: Record<string, unknown>): CustomFilters {
     const items = list(v);
     return items && new Set(items);
   };
-  const words = (v: unknown) => list(v)?.map((w) => w.toLowerCase());
-  const minAmount = bound(q.minAmount, 'minAmount');
-  const maxAmount = bound(q.maxAmount, 'maxAmount');
-  if (minAmount !== undefined && maxAmount !== undefined && minAmount > maxAmount)
-    throw new BadRequest('minAmount must not be more than maxAmount');
-  return {
-    accounts: set(q.accounts),
-    categories: set(q.categories),
-    tags: set(q.tags),
-    excludeTags: set(q.excludeTags),
-    keywords: words(q.keywords),
-    excludeKeywords: words(q.excludeKeywords),
-    minAmount,
-    maxAmount,
-  };
+  return { accounts: set(q.accounts), categories: set(q.categories), rules: parseRules(q.rules) };
 }
 
-/** Every filter but the amount bounds, which need the base amount. */
-function matches(ds: Dataset, t: Transaction, accountId: string, flowId: string, f: CustomFilters): boolean {
-  if (f.accounts && !f.accounts.has(accountId)) return false;
-  if (f.categories && !f.categories.has(flowId)) return false;
-  if (f.tags || f.excludeTags) {
-    const tags = ds.tagsByTransaction.get(t.id) ?? [];
-    if (f.tags && !tags.some((id) => f.tags!.has(id))) return false;
-    if (f.excludeTags && tags.some((id) => f.excludeTags!.has(id))) return false;
-  }
-  if (f.keywords || f.excludeKeywords) {
-    const text = [t.title, t.description].filter(Boolean).join('\n').toLowerCase();
-    if (f.keywords && !f.keywords.some((w) => text.includes(w))) return false;
-    if (f.excludeKeywords?.some((w) => text.includes(w))) return false;
-  }
-  return true;
+/** What the rules look at. `amount` is null when the currency has no rate. */
+interface Subject {
+  tagIds: string[];
+  text: string;
+  amount: number | null;
 }
 
-const withinBounds = (base: number, f: CustomFilters) => {
-  const v = round(Math.abs(base));
-  return (f.minAmount === undefined || v >= f.minAmount) && (f.maxAmount === undefined || v <= f.maxAmount);
-};
+/**
+ * true or false; null when the answer hangs on an amount nobody can know (no rate), by three-valued logic: within
+ * "all" a false decides, within "any" a true does, and otherwise an unknown leaves the group unknown.
+ */
+export function test(rule: CustomReportRule, s: Subject): boolean | null {
+  switch (rule.kind) {
+    case 'tags': {
+      const has = (id: string) => s.tagIds.includes(id);
+      if (rule.op === 'any') return rule.tagIds.some(has);
+      if (rule.op === 'all') return rule.tagIds.every(has);
+      return !rule.tagIds.some(has);
+    }
+    case 'text': {
+      const hit = rule.words.some((w) => s.text.includes(w));
+      return rule.op === 'contains' ? hit : !hit;
+    }
+    case 'amount':
+      if (s.amount === null) return null;
+      return (rule.min === undefined || s.amount >= rule.min) && (rule.max === undefined || s.amount <= rule.max);
+    case 'group': {
+      const decisive = rule.match === 'any';
+      let unknown = false;
+      for (const r of rule.rules) {
+        const v = test(r, s);
+        if (v === null) unknown = true;
+        else if (v === decisive) return v;
+      }
+      return unknown ? null : !decisive || !rule.rules.length;
+    }
+  }
+}
+
+const inScope = (accountId: string, flowId: string, f: CustomFilters) =>
+  (!f.accounts || f.accounts.has(accountId)) && (!f.categories || f.categories.has(flowId));
+
+const subject = (ds: Dataset, t: Transaction, amount: number | null): Subject => ({
+  tagIds: ds.tagsByTransaction.get(t.id) ?? [],
+  text: [t.title, t.description].filter(Boolean).join('\n').toLowerCase(),
+  amount,
+});
 
 const roundAll = (r: Record<string, number>) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, round(v)]));
 
@@ -134,12 +196,13 @@ export function customReport(
 
     const at = t.dateTime as number;
     if (at < from || at >= to) continue;
-    if (!matches(ds, t, money.accountId, flow.id, filters)) continue;
+    if (!inScope(money.accountId, flow.id, filters)) continue;
+    const verdict = filters.rules ? test(filters.rules, subject(ds, t, money.base == null ? null : round(Math.abs(money.base)))) : true;
+    if (verdict === false) continue;
     if (money.base == null) {
       unconverted.add(money.currency);
       continue;
     }
-    if (!withinBounds(money.base, filters)) continue;
 
     const side = money.direction === 'in' ? 'income' : 'expense';
     const b = buckets.get(bucketKey(at, granularity, tz))!;

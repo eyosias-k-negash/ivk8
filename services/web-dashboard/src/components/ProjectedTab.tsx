@@ -5,7 +5,7 @@ import type { Granularity, PlannedData, ProjectionData } from '@ivy/contracts';
 import { useReport } from '../api/hooks';
 import { useParams } from '../state/params';
 import { ErrorBox } from './ErrorBox';
-import { SERIES, Unconverted, type DateRange } from './FlowReports';
+import { RelativeRange, SERIES, Unconverted, type DateRange } from './FlowReports';
 import { fmtMoney, fmtPct, offsetMs } from '../format';
 
 const OTHER = '__other';
@@ -330,6 +330,7 @@ export function ProjectedTab({ fileId }: { fileId: string }) {
         {([3, 6, 12, 24] as const).map((m) => (
           <button key={m} className="link" onClick={() => setRange(ahead(m))}>Next {m} months</button>
         ))}
+        <RelativeRange mode="next" onPick={setRange} />
         <label>
           Interval{' '}
           <select value={granularity} onChange={(e) => setGranularity(e.target.value as Granularity)}>

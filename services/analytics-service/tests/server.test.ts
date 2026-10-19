@@ -127,12 +127,14 @@ describe('custom-report route', () => {
     const drop = tx({ accountId: ID.cash, type: 'EXPENSE', amount: 90, categoryId: ID.food, title: 'Groceries', dateTime: utc('2026-09-04T10:00:00Z') });
     await a.inject({ method: 'PUT', url: `/datasets/${key}`, payload: makeBackup({ transactions: [keep, drop] }) });
     const url = `/datasets/${key}/custom-report?from=2026-09-01&to=2026-10-31&granularity=month&groupBy=category`;
-    const res = (await a.inject(`${url}&categories=${ID.food}&keywords=taxi&maxAmount=50`)).json();
+    const rules = { kind: 'group', match: 'all', rules: [{ kind: 'text', op: 'contains', words: ['taxi'] }, { kind: 'amount', max: 50 }] };
+    const res = (await a.inject(`${url}&categories=${ID.food}&rules=${encodeURIComponent(JSON.stringify(rules))}`)).json();
     expect(res.data.transactionIds).toEqual([keep.id]);
     expect(res.data.buckets[0]).toEqual({ bucket: '2026-09', income: 0, expense: 40, incomeBy: {}, expenseBy: { [ID.food]: 40 }, count: 1 });
     expect(res.data.groups).toEqual([{ id: ID.food, name: 'Food', income: 0, expense: 40 }]);
     expect((await a.inject(`${url}&groupBy=tag`)).statusCode).toBe(400);
-    expect((await a.inject(`${url}&minAmount=-5`)).statusCode).toBe(400);
-    expect((await a.inject(`${url}&minAmount=9&maxAmount=1`)).json().error.code).toBe('BAD_REQUEST');
+    expect((await a.inject(`${url}&rules=${encodeURIComponent('{"kind":')}`)).statusCode).toBe(400);
+    const crossed = { kind: 'group', match: 'any', rules: [{ kind: 'amount', min: 9, max: 1 }] };
+    expect((await a.inject(`${url}&rules=${encodeURIComponent(JSON.stringify(crossed))}`)).json().error.code).toBe('BAD_REQUEST');
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type Dispatch, type SetStateAction } from 'react';
 import { Bar, CartesianGrid, ComposedChart, Line, Rectangle, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, type BarShapeProps } from 'recharts';
 import type { CustomReportData, CustomReportGroup, CustomReportOption, Granularity, GroupBy, TransactionRow } from '@ivy/contracts';
 import { useReport } from '../api/hooks';
@@ -8,8 +8,10 @@ import { Kpi, SERIES, Unconverted, type DateRange } from './FlowReports';
 import { TransactionsTable } from './TransactionsTable';
 import { fmtMoney, fmtPct } from '../format';
 import {
-  ALL, AVG_BUCKET, NET, NET_AVG, OTHER, activeFilters, clearFilters, outerKeys, parseAmount, reportQuery, shapeReport,
-  type ReportConfig, type ReportRow, type ReportSeries, type ReportView, type Side,
+  ALL, AVG_BUCKET, NET, NET_AVG, OTHER, activeFilters, addRule, amountBounds, checkCondition, clearFilters, mapRule, newCondition,
+  newGroup, outerKeys, removeRule, reportQuery, shapeReport, updateRule,
+  type ConditionDraft, type ConditionKind, type GroupDraft, type ReportConfig, type ReportRow, type ReportSeries, type ReportView,
+  type RuleDraft, type Side,
 } from '../reports';
 
 const DEFAULT_PICKS = 5; // as in Trends: leaves a few colors free for the user's own picks
@@ -29,14 +31,33 @@ type Picks = Map<string, { slot: number; name: string }>;
 type Colored = ReportSeries & { color: string };
 type Options = CustomReportData['options'];
 
-/** `value`, once it has stopped changing for `ms`. */
-function useSettled<T>(value: T, ms: number): T {
-  const [settled, setSettled] = useState(value);
+type Update = Dispatch<SetStateAction<ReportConfig>>;
+
+/**
+ * A text input that hands its value on once typing pauses (or on leaving it), so each keystroke doesn't refetch.
+ * It follows `value` when that changes from outside, such as Clear all.
+ */
+function SettledInput({ value, onSettle, ...rest }: { value: string; onSettle: (v: string) => void } & Omit<ComponentProps<'input'>, 'value' | 'onChange'>) {
+  const [text, setText] = useState(value);
+  const handed = useRef(value);
+  const settle = useRef(onSettle);
+  settle.current = onSettle;
   useEffect(() => {
-    const id = setTimeout(() => setSettled(value), ms);
+    if (value !== handed.current) {
+      handed.current = value;
+      setText(value);
+    }
+  }, [value]);
+  const flush = (v: string) => {
+    if (v === handed.current) return;
+    handed.current = v;
+    settle.current(v);
+  };
+  useEffect(() => {
+    const id = setTimeout(() => flush(text), TYPING_MS);
     return () => clearTimeout(id);
-  }, [value, ms]);
-  return settled;
+  }, [text]);
+  return <input {...rest} value={text} onChange={(e) => setText(e.target.value)} onBlur={() => flush(text)} />;
 }
 
 /** The configurable report: income above zero and expense below for the transactions passing the filters. */
@@ -44,15 +65,11 @@ export function ReportsTab({ fileId, range, config, onChange }: {
   fileId: string;
   range: DateRange;
   config: ReportConfig;
-  onChange: (c: ReportConfig) => void;
+  /** Takes updater functions too: typed text lands a moment after typing, and must not undo a click made meanwhile. */
+  onChange: Update;
 }) {
-  const set = (patch: Partial<ReportConfig>) => onChange({ ...config, ...patch });
-  // Typed filters apply once typing pauses; clicks apply at once.
-  const keywords = useSettled(config.keywords, TYPING_MS);
-  const excludeKeywords = useSettled(config.excludeKeywords, TYPING_MS);
-  const minAmount = useSettled(config.minAmount, TYPING_MS);
-  const maxAmount = useSettled(config.maxAmount, TYPING_MS);
-  const query = reportQuery({ ...config, keywords, excludeKeywords, minAmount, maxAmount });
+  const set = (patch: Partial<ReportConfig>) => onChange((c) => ({ ...c, ...patch }));
+  const query = reportQuery(config);
   const problem = 'problem' in query ? query.problem : null;
   const r = useReport<CustomReportData>(
     fileId,
@@ -163,8 +180,9 @@ export function ReportsTab({ fileId, range, config, onChange }: {
       <p className="muted" style={{ fontSize: 12 }}>
         Executed only; planned payments are not counted. As in every tab, income and expense on accounts excluded from the balance are
         left out, a transfer to or from one counts as income or expense on the included account, under its category (or its two accounts
-        if it has none), and transfers between included accounts never count. A transaction must pass every filter: the account is the
-        included side, words match its title or description (any case), and the amount bounds apply to each transaction in {base || 'base currency'}.
+        if it has none), and transfers between included accounts never count. A transaction counts when its included side is one of the
+        accounts, its category one of the categories, and it meets the conditions. Words match its title or description in any case;
+        amounts are each transaction’s own, in {base || 'base currency'}, bounds included. A condition still being filled in is left out.
       </p>
     </>
   );
@@ -176,74 +194,172 @@ function ReportFilters({ config, options, base, onChange }: {
   config: ReportConfig;
   options: Options | null;
   base: string;
-  onChange: (c: ReportConfig) => void;
+  onChange: Update;
 }) {
-  const set = (patch: Partial<ReportConfig>) => onChange({ ...config, ...patch });
+  const set = (patch: Partial<ReportConfig>) => onChange((c) => ({ ...c, ...patch }));
   const n = activeFilters(config);
-  const tagNames = (ids: string[]) => names(ids, options?.tags);
-  const min = parseAmount(config.minAmount);
-  const max = parseAmount(config.maxAmount);
-  const crossed = min !== undefined && max !== undefined && min > max;
-  const invalid = (v: number | undefined) => Number.isNaN(v) || crossed || undefined;
+  const edit = (fn: (root: GroupDraft) => GroupDraft) => onChange((c) => ({ ...c, rules: fn(c.rules) }));
   return (
     <fieldset className="report-filters">
       <legend>
-        Filters{n > 0 && <> · {n} on <button className="link" onClick={() => onChange(clearFilters(config))}>Clear all</button></>}
+        Filters{n > 0 && <> · {n} on <button className="link" onClick={() => onChange(clearFilters)}>Clear all</button></>}
       </legend>
       <OnlyPicker label="Accounts" noun="accounts" options={options?.accounts} value={config.accounts} onChange={(accounts) => set({ accounts })} />
       <OnlyPicker label="Categories" noun="categories" options={options?.categories} value={config.categories} onChange={(categories) => set({ categories })} />
-      <div className="field">
-        <span className="field-label">With any of these tags</span>
-        <MultiSelect
-          label="With any of these tags"
-          summary={config.tags.length ? tagNames(config.tags) : 'Any, tagged or not'}
-          options={options?.tags}
-          checked={new Set(config.tags)}
-          // A tag can't be wanted and unwanted at once: the latest choice wins.
-          onChange={(s) => set({ tags: [...s], excludeTags: config.excludeTags.filter((id) => !s.has(id)) })}
-        />
-      </div>
-      <div className="field">
-        <span className="field-label">With none of these tags</span>
-        <MultiSelect
-          label="With none of these tags"
-          summary={config.excludeTags.length ? tagNames(config.excludeTags) : 'No tag left out'}
-          options={options?.tags}
-          checked={new Set(config.excludeTags)}
-          onChange={(s) => set({ excludeTags: [...s], tags: config.tags.filter((id) => !s.has(id)) })}
-        />
-      </div>
-      <label className="field">
-        <span className="field-label">Title or description has any of</span>
-        <input value={config.keywords} placeholder="e.g. coffee, taxi" onChange={(e) => set({ keywords: e.target.value })} />
-      </label>
-      <label className="field">
-        <span className="field-label">… and none of</span>
-        <input value={config.excludeKeywords} placeholder="e.g. refund" onChange={(e) => set({ excludeKeywords: e.target.value })} />
-      </label>
-      <div className="field">
-        <span className="field-label">Each transaction’s amount{base && ` (${base})`}</span>
-        <span className="range-inputs">
-          <input
-            aria-label="Smallest amount"
-            inputMode="decimal"
-            placeholder="from"
-            value={config.minAmount}
-            aria-invalid={invalid(min)}
-            onChange={(e) => set({ minAmount: e.target.value })}
-          />
-          <span className="muted">to</span>
-          <input
-            aria-label="Largest amount"
-            inputMode="decimal"
-            placeholder="to"
-            value={config.maxAmount}
-            aria-invalid={invalid(max)}
-            onChange={(e) => set({ maxAmount: e.target.value })}
-          />
-        </span>
+      <div className="rules">
+        <span className="field-label">Conditions on tags, words and amount</span>
+        <RuleGroup group={config.rules} depth={0} tags={options?.tags} base={base} edit={edit} />
       </div>
     </fieldset>
+  );
+}
+
+/**
+ * Conditions joined by one connector, as in a spreadsheet filter: "Where … and … and …". The connector is picked on
+ * the second row and holds for the whole group; to mix "and" with "or", put some conditions in a group of their own.
+ * Only the top level adds groups (two levels read clearly; the API allows three).
+ */
+function RuleGroup({ group, depth, tags, base, edit }: {
+  group: GroupDraft;
+  depth: number;
+  tags: CustomReportOption[] | undefined;
+  base: string;
+  edit: (fn: (root: GroupDraft) => GroupDraft) => void;
+}) {
+  const word = group.match === 'all' ? 'and' : 'or';
+  const firstKind: ConditionKind = tags?.length ? 'tags' : 'text';
+  const joint = (i: number) =>
+    i === 0 ? (
+      'Where'
+    ) : i === 1 ? (
+      <select
+        aria-label={depth ? 'Join the conditions in this group with' : 'Join conditions with'}
+        value={group.match}
+        onChange={(e) => edit((root) => updateRule(root, group.id, { match: e.target.value as GroupDraft['match'] }))}
+      >
+        <option value="all">and</option>
+        <option value="any">or</option>
+      </select>
+    ) : (
+      word
+    );
+  return (
+    <div className={depth ? 'rule-group nested' : 'rule-group'} role="group" aria-label={depth ? `Group joined by ${word}` : 'Conditions'}>
+      {!group.rules.length && (
+        <p className="muted rule-empty">
+          {depth ? 'This group is empty, so it filters nothing.' : 'No conditions: everything in the accounts and categories above counts.'}
+        </p>
+      )}
+      {group.rules.map((r, i) => (
+        <div className="rule-row" key={r.id}>
+          <span className="rule-joint">{joint(i)}</span>
+          {r.kind === 'group' ? (
+            <RuleGroup group={r} depth={depth + 1} tags={tags} base={base} edit={edit} />
+          ) : (
+            <Condition c={r} tags={tags} base={base} edit={edit} />
+          )}
+        </div>
+      ))}
+      <div className="rule-actions">
+        <button type="button" className="link" onClick={() => edit((root) => addRule(root, group.id, newCondition(firstKind)))}>
+          + Add condition
+        </button>
+        {depth === 0 && (
+          <button type="button" className="link" onClick={() => edit((root) => addRule(root, group.id, newGroup(group.match, firstKind)))}>
+            + Add group
+          </button>
+        )}
+        {depth > 0 && (
+          <button type="button" className="link" onClick={() => edit((root) => removeRule(root, group.id))}>
+            Remove group
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const OPS: { [K in ConditionKind]: [Extract<ConditionDraft, { kind: K }>['op'], string][] } = {
+  tags: [['any', 'include any of'], ['all', 'include all of'], ['none', 'include none of']],
+  text: [['contains', 'contains any of'], ['excludes', 'contains none of']],
+  amount: [['atLeast', 'is at least'], ['atMost', 'is at most'], ['between', 'is between']],
+};
+
+function Condition({ c, tags, base, edit }: {
+  c: ConditionDraft;
+  tags: CustomReportOption[] | undefined;
+  base: string;
+  edit: (fn: (root: GroupDraft) => GroupDraft) => void;
+}) {
+  const set = (patch: Partial<RuleDraft>) => edit((root) => updateRule(root, c.id, patch));
+  const check = checkCondition(c);
+  return (
+    <div className="rule-cond">
+      <select
+        aria-label="Condition on"
+        value={c.kind}
+        // Another field starts a fresh condition in the same place.
+        onChange={(e) => edit((root) => mapRule(root, c.id, () => ({ ...newCondition(e.target.value as ConditionKind), id: c.id })))}
+      >
+        <option value="tags">Tags</option>
+        <option value="text">Title or description</option>
+        <option value="amount">Amount</option>
+      </select>
+      <select aria-label="Test" value={c.op} onChange={(e) => set({ op: e.target.value } as Partial<RuleDraft>)}>
+        {OPS[c.kind].map(([op, label]) => <option key={op} value={op}>{label}</option>)}
+      </select>
+      {c.kind === 'tags' && (
+        <MultiSelect
+          label="Tags"
+          summary={c.tagIds.length ? names(c.tagIds, tags) : 'Choose tags'}
+          options={tags}
+          checked={new Set(c.tagIds)}
+          onChange={(s) => set({ tagIds: [...s] })}
+        />
+      )}
+      {c.kind === 'text' && (
+        <SettledInput
+          className="rule-words"
+          aria-label="Words, separated by commas"
+          placeholder="e.g. coffee, taxi"
+          value={c.text}
+          onSettle={(text) => set({ text })}
+        />
+      )}
+      {c.kind === 'amount' && <AmountInputs c={c} base={base} set={set} />}
+      {check === 'incomplete' && <span className="rule-hint">not applied yet</span>}
+      <button type="button" className="rule-remove" aria-label="Remove condition" title="Remove condition" onClick={() => edit((root) => removeRule(root, c.id))}>
+        ×
+      </button>
+    </div>
+  );
+}
+
+function AmountInputs({ c, base, set }: {
+  c: Extract<ConditionDraft, { kind: 'amount' }>;
+  base: string;
+  set: (patch: Partial<RuleDraft>) => void;
+}) {
+  const { min, max } = amountBounds(c);
+  const crossed = min !== undefined && max !== undefined && min > max;
+  const invalid = (v: number | undefined) => Number.isNaN(v) || crossed || undefined;
+  const input = (which: 'min' | 'max', label: string) => (
+    <SettledInput
+      aria-label={label}
+      inputMode="decimal"
+      placeholder="0.00"
+      value={c[which]}
+      aria-invalid={invalid(which === 'min' ? min : max)}
+      onSettle={(v) => set({ [which]: v })}
+    />
+  );
+  return (
+    <span className="range-inputs">
+      {c.op !== 'atMost' && input('min', c.op === 'between' ? 'Smallest amount' : 'Amount')}
+      {c.op === 'between' && <span className="muted">and</span>}
+      {c.op !== 'atLeast' && input('max', c.op === 'between' ? 'Largest amount' : 'Amount')}
+      {base && <span className="muted">{base}</span>}
+    </span>
   );
 }
 

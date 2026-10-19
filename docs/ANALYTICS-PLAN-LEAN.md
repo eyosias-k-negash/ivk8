@@ -137,7 +137,7 @@ Only drive-sync calls these; the browser reaches the same reports as `/api/backu
 | `GET /datasets/:key/budgets?date=` *(Tier 1)* | Budget status list |
 | `GET /datasets/:key/planned` *(Tier 1)* | Overdue and upcoming planned transactions |
 | `GET /datasets/:key/tags?from=&to=&granularity=` *(Tier 1)* | Per-tag totals, plus bucketed money per exact tag set |
-| `GET /datasets/:key/custom-report?from=&to=&granularity=&groupBy=&accounts=&categories=&tags=&excludeTags=&keywords=&excludeKeywords=&minAmount=&maxAmount=` | Income and expense per bucket for the transactions passing every filter (lists comma-separated), optional category/account split, the filter options, and the matching transaction ids |
+| `GET /datasets/:key/custom-report?from=&to=&granularity=&groupBy=&accounts=&categories=&rules=` | Income and expense per bucket for the transactions in the accounts and categories (comma-separated) that meet `rules`: a JSON tree of tag, text and amount conditions joined by all/any, nesting up to 3 levels, 50 rules at most. Also the filter options and the matching transaction ids |
 | `GET /datasets/:key/payees` *(Tier 1)* | Top payees |
 
 Every report accepts `tz` (default `+03:00`) and `rateOverrides`, and returns `{ baseCurrency, tz, ratesUsed, warnings, data }`.

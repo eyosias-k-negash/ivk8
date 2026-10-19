@@ -61,7 +61,7 @@ For this loop, also add `http://localhost:5173/api/auth/callback` as a redirect 
 - Accounts excluded from balance don't count toward net worth, and their own income and expense never count anywhere. A transfer to or from one counts as expense or income on the included side, under its category. A transfer between two included accounts is never income or expense. Deleted items are ignored. Loan records are ignored, but loan-linked transactions count normally.
 - Budgets run per calendar month and count money out in their categories only. Budgets with no categories are ignored and produce a warning. The projection appears after day 7.
 - A tag's own total counts every transaction carrying it, so tag totals can add up to more than was spent. Charting several tags together counts a transaction that carries more than one of them once, in its own segment for that combination (e.g. "Trip + Work"), so overlaps stay visible and the bars add up to what the tags actually cost.
-- The Reports tab counts money by the same rules, then keeps only transactions passing every filter: account (the side included in the balance), category (as the category breakdown files it), any of the included tags and none of the excluded ones, words in the title or description (any of, none of; any case), and bounds on each transaction's amount in base currency, to the cent. A currency with no rate can't be bounded, so it is left out and reported.
+- The Reports tab counts money by the same rules, then keeps the transactions in the chosen accounts (the side included in the balance) and categories (as the category breakdown files them) that meet its conditions. Conditions test tags (any of, all of, none of), words in the title or description (any of, none of; any case) and each transaction's amount in base currency (at least, at most, between; to the cent, bounds included). They are joined by "and" or "or", one connector per group, and groups nest so the two can be mixed, e.g. *coffee or (Trip and at least 1,000)*. A condition still being filled in is ignored. A currency with no rate can't be totalled or tested on amount, so it is left out and reported when its transactions match, or might.
 
 ## Repository layout
 
@@ -104,7 +104,7 @@ Make the CI jobs required status checks on `main` so a failing gate blocks the m
 | drive-sync: OAuth, session, folder, listing, size limit, backoff, proxy + re-ingest | done, tested |
 | Dashboard: transactions, balances, income & expense, trends (charts + table view), rates & timezone | done |
 | Dashboard: tags (stacked per-tag chart, totals, average per period) | done |
-| Dashboard: reports (filters; income above zero and expense below, net line, average bar, table view, matching transactions) | done |
+| Dashboard: reports (account/category scope, and/or condition builder; income above zero and expense below, net line, average bar, table view, matching transactions) | done |
 | Dashboard: payees | tab shows the raw `501` response until the report lands |
 | k8s, CI and release | written; first real run pending |
 | Golden test against a real backup | pending (needs a sanitized real backup) |

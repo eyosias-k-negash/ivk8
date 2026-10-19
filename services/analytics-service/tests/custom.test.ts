@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { ingest } from '../src/engine/loader';
 import type { RateTable } from '../src/engine/currency';
 import { BadRequest, parseRange } from '../src/params';
-import { customReport, parseCustomFilters, type CustomFilters } from '../src/reports/custom';
+import type { CustomReportRule, CustomReportRuleGroup } from '@ivy/contracts';
+import { MAX_DEPTH, MAX_RULES, customReport, parseCustomFilters, type CustomFilters } from '../src/reports/custom';
 import { summaryReport } from '../src/reports/flows';
 import { ID, makeBackup, tx, utc } from './engine/fixtures';
 
@@ -54,6 +55,13 @@ const run = (filters: CustomFilters = {}, groupBy: 'none' | 'category' | 'accoun
   customReport(ds, range.from, range.to, 'MONTH', groupBy, filters, '+03:00', r);
 const totals = (o: ReturnType<typeof run>) => ({ income: o.income, expense: o.expense, count: o.count });
 const filters = (q: Record<string, string>) => parseCustomFilters(q);
+const all = (...rules: CustomReportRule[]): CustomReportRuleGroup => ({ kind: 'group', match: 'all', rules });
+const any = (...rules: CustomReportRule[]): CustomReportRuleGroup => ({ kind: 'group', match: 'any', rules });
+const tags = (op: 'any' | 'all' | 'none', ...tagIds: string[]): CustomReportRule => ({ kind: 'tags', op, tagIds });
+const text = (op: 'contains' | 'excludes', ...words: string[]): CustomReportRule => ({ kind: 'text', op, words });
+const amount = (min?: number, max?: number): CustomReportRule => ({ kind: 'amount', min, max });
+/** Filters as the API receives them: the rules go through the JSON parser. */
+const where = (rules: CustomReportRuleGroup, scope: Record<string, string> = {}) => filters({ ...scope, rules: JSON.stringify(rules) });
 
 describe('customReport', () => {
   it('without filters counts exactly what the income and expense summary counts', () => {
@@ -114,36 +122,54 @@ describe('customReport', () => {
     expect(totals(run(filters({ categories: TO_HIDDEN })))).toEqual({ income: 0, expense: 400, count: 1 });
   });
 
-  it('keeps transactions carrying any included tag and none of the excluded ones', () => {
-    expect(totals(run(filters({ tags: TRIP })))).toEqual({ income: 0, expense: 300 + 200 + 400, count: 3 });
-    expect(totals(run(filters({ tags: TRIP, excludeTags: WORK })))).toEqual({ income: 0, expense: 600, count: 2 });
-    expect(totals(run(filters({ excludeTags: TRIP })))).toEqual({ income: 1150, expense: 120, count: 4 });
-    // exclusion wins over inclusion
-    expect(run(filters({ tags: TRIP, excludeTags: TRIP })).count).toBe(0);
+  it('tests tags: any of, all of, none of', () => {
+    expect(totals(run(where(all(tags('any', TRIP)))))).toEqual({ income: 0, expense: 300 + 200 + 400, count: 3 });
+    expect(run(where(all(tags('all', TRIP, WORK)))).transactionIds).toEqual([lunch.id]);
+    expect(totals(run(where(all(tags('none', TRIP)))))).toEqual({ income: 1150, expense: 120, count: 4 });
   });
 
-  it('matches keywords in the title or description, ignoring case', () => {
-    expect(totals(run(filters({ keywords: 'Coffee' })))).toEqual({ income: 0, expense: 50 + 300 + 70, count: 3 });
-    expect(totals(run(filters({ keywords: 'coffee', excludeKeywords: 'LATE' })))).toEqual({ income: 0, expense: 350, count: 2 });
-    expect(totals(run(filters({ keywords: 'coffee, cinema' })))).toEqual({ income: 0, expense: 620, count: 4 });
-    expect(run(filters({ excludeKeywords: 'coffee' })).count).toBe(4); // one with no title or description contains no word, so it stays
+  it('tests words in the title or description, ignoring case', () => {
+    expect(totals(run(where(all(text('contains', 'Coffee')))))).toEqual({ income: 0, expense: 50 + 300 + 70, count: 3 });
+    expect(totals(run(where(all(text('contains', 'coffee', 'cinema')))))).toEqual({ income: 0, expense: 620, count: 4 });
+    expect(run(where(all(text('excludes', 'coffee')))).count).toBe(4); // one with no title or description contains no word, so it stays
   });
 
   it('bounds the base amount, inclusively, for income and expense alike', () => {
-    expect(totals(run(filters({ minAmount: '200' })))).toEqual({ income: 1000, expense: 300 + 200 + 400, count: 4 });
-    expect(totals(run(filters({ maxAmount: '200' })))).toEqual({ income: 150, expense: 50 + 200 + 70, count: 4 });
+    expect(totals(run(where(all(amount(200)))))).toEqual({ income: 1000, expense: 300 + 200 + 400, count: 4 });
+    expect(totals(run(where(all(amount(undefined, 200)))))).toEqual({ income: 150, expense: 50 + 200 + 70, count: 4 });
     // 3 USD is 300 in base: the bound is on the base amount, not the account's own
-    expect(run(filters({ minAmount: '300', maxAmount: '300' })).transactionIds).toEqual([lunch.id]);
+    expect(run(where(all(amount(300, 300)))).transactionIds).toEqual([lunch.id]);
   });
 
-  it('combines filters', () => {
-    const o = run(filters({ accounts: ID.cash, categories: `${ID.food},${ID.fun}`, keywords: 'coffee,cinema', maxAmount: '100' }));
-    expect(o.transactionIds.sort()).toEqual([coffee.id, late.id].sort());
+  it('joins conditions with and, or or', () => {
+    // coffee, lunch, late contain "coffee"; only late is "late"
+    expect(run(where(all(text('contains', 'coffee'), text('excludes', 'late')))).transactionIds).toEqual([coffee.id, lunch.id]);
+    // Trip (lunch, movie, savings) or coffee (coffee, lunch, late): lunch once
+    expect(totals(run(where(any(tags('any', TRIP), text('contains', 'coffee')))))).toEqual({ income: 0, expense: 300 + 200 + 400 + 50 + 70, count: 5 });
+  });
+
+  it('nests groups', () => {
+    // (Trip or coffee) and at most 250
+    const o = run(where(all(any(tags('any', TRIP), text('contains', 'coffee')), amount(undefined, 250))));
+    expect(o.transactionIds).toEqual([coffee.id, movie.id, late.id]);
+    // (Trip and at least 300) or salary
+    expect(totals(run(where(any(all(tags('any', TRIP), amount(300)), text('contains', 'salary')))))).toEqual({ income: 1000, expense: 700, count: 3 });
+  });
+
+  it('lets an empty group match everything, whatever its connector', () => {
+    expect(run(where(all())).count).toBe(7);
+    expect(run(where(any())).count).toBe(7);
+    expect(run(where(all(any(), tags('any', WORK)))).transactionIds).toEqual([lunch.id]);
+  });
+
+  it('combines the account and category scope with the rules', () => {
+    const o = run(where(all(text('contains', 'coffee', 'cinema'), amount(undefined, 100)), { accounts: ID.cash, categories: `${ID.food},${ID.fun}` }));
+    expect(o.transactionIds).toEqual([coffee.id, late.id]);
   });
 
   it('lists the options whatever the range and filters', () => {
     const r = parseRange({ from: '2026-09-01', to: '2026-09-02' }, '+03:00');
-    const o = customReport(ds, r.from, r.to, 'DAY', 'none', filters({ tags: TRIP }), '+03:00', rates);
+    const o = customReport(ds, r.from, r.to, 'DAY', 'none', where(all(tags('any', TRIP))), '+03:00', rates);
     expect(o.options).toEqual({
       accounts: [
         { id: ID.cash, name: 'Cash', currency: 'ETB' },
@@ -163,29 +189,53 @@ describe('customReport', () => {
     });
   });
 
-  it('reports a currency with no rate only when its transactions would otherwise match', () => {
+  it('reports a currency with no rate when its transactions match, or might if their amount were known', () => {
     const o = run({}, 'none', none);
     expect(o.unconverted).toEqual(['USD']);
     expect(totals(o)).toEqual({ income: 1150, expense: 720, count: 6 });
-    expect(run(filters({ accounts: ID.cash }), 'none', none).unconverted).toEqual([]);
+    expect(run(where(all(), { accounts: ID.cash }), 'none', none).unconverted).toEqual([]);
+    // the lunch's amount is unknown, so "at least 1000" can't rule it out
+    const big = run(where(all(amount(1000))), 'none', none);
+    expect([big.transactionIds, big.unconverted]).toEqual([[salary.id], ['USD']]);
+    // it carries Work, so the "or" holds whatever its amount
+    expect(run(where(any(amount(1000), tags('any', WORK))), 'none', none).unconverted).toEqual(['USD']);
+    // it carries Work, so the "and" fails whatever its amount
+    expect(run(where(all(tags('none', WORK), amount(0))), 'none', none).unconverted).toEqual([]);
   });
 });
 
 describe('parseCustomFilters', () => {
   it('treats absent and blank filters as no filter', () => {
-    expect(filters({ accounts: '', tags: ' , ', keywords: '' })).toEqual({});
+    expect(filters({ accounts: '', categories: ' , ', rules: '' })).toEqual({});
   });
 
-  it('splits lists, trims items and lower-cases words', () => {
-    const f = filters({ accounts: ' a, b,,', keywords: 'Coffee , TAXI' });
-    expect(f.accounts).toEqual(new Set(['a', 'b']));
-    expect(f.keywords).toEqual(['coffee', 'taxi']);
+  it('splits scope lists and trims items', () => {
+    expect(filters({ accounts: ' a, b,,' }).accounts).toEqual(new Set(['a', 'b']));
   });
 
-  it('rejects bad bounds', () => {
-    expect(() => filters({ minAmount: '-1' })).toThrow(BadRequest);
-    expect(() => filters({ maxAmount: 'lots' })).toThrow(BadRequest);
-    expect(() => filters({ minAmount: '10', maxAmount: '5' })).toThrow(/not be more than/);
-    expect(filters({ minAmount: '5', maxAmount: '5' })).toMatchObject({ minAmount: 5, maxAmount: 5 });
+  it('normalizes the rules: trimmed entries, lower-cased words', () => {
+    const f = where(any(text('contains', ' Coffee ', 'TAXI'), tags('none', ' t1 '), amount(5)));
+    expect(f.rules).toEqual(any(text('contains', 'coffee', 'taxi'), tags('none', 't1'), { kind: 'amount', min: 5 }));
+  });
+
+  it('rejects malformed rules', () => {
+    const bad = (rules: unknown) => () => filters({ rules: typeof rules === 'string' ? rules : JSON.stringify(rules) });
+    expect(bad('{')).toThrow(/JSON/);
+    expect(bad(tags('any', 'a'))).toThrow(/must be a group/);
+    expect(bad({ kind: 'group', match: 'some', rules: [] })).toThrow(BadRequest);
+    expect(bad({ kind: 'group', match: 'all', rules: [{ kind: 'payee' }] })).toThrow(/group, tags, text or amount/);
+    expect(bad(all(tags('any')))).toThrow(/at least one/);
+    expect(bad(all(text('contains', ' ')))).toThrow(/at least one/);
+    expect(bad(all({ kind: 'amount' }))).toThrow(/min or a max/);
+    expect(bad(all(amount(-1)))).toThrow(BadRequest);
+    expect(bad(all(amount(10, 5)))).toThrow(/not be more than/);
+  });
+
+  it('caps nesting and size', () => {
+    expect(() => where(all(any(all(tags('any', 'a')))))).not.toThrow(); // three levels
+    expect(() => where(all(any(all(any()))))).toThrow(new RegExp(`${MAX_DEPTH} levels`));
+    const many = (n: number) => all(...Array.from({ length: n }, () => tags('any', 'a')));
+    expect(() => where(many(MAX_RULES - 1))).not.toThrow(); // plus the root
+    expect(() => where(many(MAX_RULES))).toThrow(new RegExp(`at most ${MAX_RULES}`));
   });
 });

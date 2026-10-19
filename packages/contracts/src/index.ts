@@ -329,26 +329,37 @@ export interface TagsData {
 }
 
 /**
- * Filters of the Reports tab, as query params of `/custom-report`. Lists are comma-separated; an absent filter
- * restricts nothing. A transaction must pass every filter given.
+ * Filters of the Reports tab, as query params of `/custom-report`. An absent filter restricts nothing. A transaction
+ * must be in the accounts and categories given and meet the rules.
  */
 export interface CustomReportParams {
-  /** Account ids: the side included in the balance is one of them (see SummaryData.byAccount). */
+  /** Comma-separated account ids: the side included in the balance is one of them (see SummaryData.byAccount). */
   accounts?: string;
-  /** Flow ids, as in the category breakdown: category ids, "uncategorized", or "transfer:<from>><to>". */
+  /** Comma-separated flow ids, as in the category breakdown: category ids, "uncategorized", or "transfer:<from>><to>". */
   categories?: string;
-  /** Tag ids: the transaction carries at least one. */
-  tags?: string;
-  /** Tag ids: the transaction carries none. Wins over `tags`. */
-  excludeTags?: string;
-  /** Words: its title or description contains at least one (case-insensitive). */
-  keywords?: string;
-  /** Words: its title and description contain none. Wins over `keywords`. */
-  excludeKeywords?: string;
-  /** Inclusive bounds on the amount counted, in base currency. */
-  minAmount?: string;
-  maxAmount?: string;
+  /** JSON CustomReportRuleGroup. */
+  rules?: string;
 }
+
+/**
+ * One test on a transaction:
+ * - tags: `any` = it carries at least one of the tags, `all` = every one, `none` = none of them.
+ * - text: `contains` = its title or description contains at least one of the words (any case), `excludes` = none.
+ * - amount: its amount in base currency, to the cent, lies within the bounds (inclusive; at least one bound).
+ */
+export type CustomReportCondition =
+  | { kind: 'tags'; op: 'any' | 'all' | 'none'; tagIds: string[] }
+  | { kind: 'text'; op: 'contains' | 'excludes'; words: string[] }
+  | { kind: 'amount'; min?: number; max?: number };
+
+/** Conditions and nested groups joined by one connector: all must hold, or any one. An empty group matches everything. */
+export interface CustomReportRuleGroup {
+  kind: 'group';
+  match: 'all' | 'any';
+  rules: CustomReportRule[];
+}
+
+export type CustomReportRule = CustomReportCondition | CustomReportRuleGroup;
 
 export interface CustomReportOption {
   id: string;
@@ -399,7 +410,10 @@ export interface CustomReportData {
   buckets: CustomReportBucket[];
   /** The matching transactions, for listing them. */
   transactionIds: string[];
-  /** Currencies left out because no rate was available (so neither their amount nor its bounds could be judged). */
+  /**
+   * Currencies left out because no rate was available: their transactions can't be totalled, nor tested against an
+   * amount condition. Listed when such a transaction matches, or might (when only its amount could decide).
+   */
   unconverted: string[];
 }
 

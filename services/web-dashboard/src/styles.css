@@ -71,7 +71,7 @@ button.link { background:none; border:0; color:var(--accent); cursor:pointer; pa
 .field { display:flex; flex-direction:column; gap:4px; min-width:0; }
 .field-label { font-size:12px; color:var(--muted); }
 .field input:not([type=checkbox]) { width:100%; }
-.field input[aria-invalid] { border-color:var(--zone-over); }
+.report-filters input[aria-invalid] { border-color:var(--zone-over); }
 .range-inputs { display:flex; align-items:center; gap:6px; } .range-inputs input { min-width:0; }
 .multi { position:relative; }
 .multi > summary { list-style:none; display:flex; align-items:center; gap:6px; padding:6px 8px; border:1px solid var(--border);
@@ -96,3 +96,19 @@ button.link { background:none; border:0; color:var(--accent); cursor:pointer; pa
 .chart-key .key-line { width:16px; height:2px; background:var(--fg); }
 .pick-legend ul.flows { grid-template-columns:repeat(auto-fill, minmax(360px, 1fr)); }
 .pick-legend ul.flows .num { min-width:13ch; text-align:right; font-variant-numeric:tabular-nums; }
+.report-filters select { padding:6px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--fg); font:inherit; font-size:13px; }
+.rules { grid-column:1 / -1; display:flex; flex-direction:column; gap:6px; min-width:0; }
+.rule-group { display:flex; flex-direction:column; gap:6px; min-width:0; }
+.rule-group.nested { flex:1; border:1px solid var(--border); border-radius:8px; padding:8px 10px; background:color-mix(in srgb, var(--fg) 3%, var(--card)); }
+.rule-row { display:flex; align-items:flex-start; gap:8px; }
+.rule-joint { flex:none; width:68px; padding-top:7px; font-size:13px; color:var(--muted); text-align:right; }
+.rule-joint select { width:100%; padding:5px 4px; }
+.rule-cond { flex:1; min-width:0; display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.rule-cond .multi { width:240px; }
+.rule-cond .rule-words { width:240px; }
+.rule-cond .range-inputs input { width:110px; }
+.rule-hint { font-size:12px; color:var(--muted); font-style:italic; }
+.rule-remove { margin-left:auto; background:none; border:0; color:var(--muted); cursor:pointer; font-size:18px; line-height:1; padding:4px 8px; border-radius:4px; }
+.rule-remove:hover, .rule-remove:focus-visible { color:var(--fg); background:var(--bg); }
+.rule-actions { display:flex; gap:16px; font-size:13px; padding-left:76px; }
+.rule-empty { margin:0; font-size:13px; }
