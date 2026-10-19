@@ -365,6 +365,7 @@ export function ProjectedTab({ fileId }: { fileId: string }) {
           </label>
         )}
         <PrintButton
+          tab="Projected"
           title={mode === 'planned' ? 'Projected: planned items' : 'Projected: moving average'}
           meta={[
             mode === 'planned' ? rangeText(range) : `Today – ${range.to}`,

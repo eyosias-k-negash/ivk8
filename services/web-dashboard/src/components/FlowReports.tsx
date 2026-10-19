@@ -297,6 +297,7 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
           </label>
         )}
         <PrintButton
+          tab="Trends"
           title={view?.title ?? 'Trends'}
           meta={[rangeText(range), `Per ${granularity.toLowerCase()}`, groupBy === 'none' ? '' : `Split by ${groupBy} (${metric})`]}
         />

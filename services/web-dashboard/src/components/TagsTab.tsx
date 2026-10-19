@@ -91,6 +91,7 @@ export function TagsTab({ fileId, range }: { fileId: string; range: DateRange })
           </select>
         </label>
         <PrintButton
+          tab="Tags"
           title={`Tags: ${metric === 'expense' ? 'expense' : 'income'}`}
           meta={[rangeText(range), `Per ${granularity.toLowerCase()}`]}
         />

@@ -143,6 +143,7 @@ export function ReportsTab({ fileId, range, config, onChange }: {
           <input type="checkbox" checked={config.showNet} onChange={(e) => set({ showNet: e.target.checked })} /> Net line
         </label>
         <PrintButton
+          tab="Reports"
           title="Custom report"
           meta={[rangeText(range), `Per ${unit}`, split === 'none' ? '' : `Split by ${split}`]}
         />

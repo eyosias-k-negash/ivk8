@@ -185,6 +185,7 @@ export function BudgetsTab({ fileId, range }: { fileId: string; range: DateRange
           </select>
         </label>
         <PrintButton
+          tab="Budgets"
           title={`Budget: ${budgets.find((b) => b.id === budgetId)?.name ?? ''}`}
           meta={[rangeText(range), `Per ${granularity.toLowerCase()}`]}
         />

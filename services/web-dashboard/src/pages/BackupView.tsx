@@ -72,7 +72,7 @@ function BalancesTab({ fileId }: { fileId: string }) {
   return (
     <>
       <label>As of <input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} /></label>
-      <PrintButton title={`Balances: net worth ${fmtMoney(data.netWorth, baseCurrency)}`} meta={[asOf ? `As of ${asOf}` : 'As of today']} />
+      <PrintButton tab="Balances" title={`Balances: net worth ${fmtMoney(data.netWorth, baseCurrency)}`} meta={[asOf ? `As of ${asOf}` : 'As of today']} />
       <h3>Net worth: {fmtMoney(data.netWorth, baseCurrency)}</h3>
       {data.unconverted.length > 0 && (
         <div className="callout warn">Excluded from net worth (no rate): {data.unconverted.join(', ')}. Add an override under “Rates & timezone”.</div>

@@ -4,6 +4,8 @@ import { useBackups, useMe } from './api/hooks';
 /** What a printed chart page needs besides the chart itself. */
 export interface PrintSpec {
   title: string;
+  /** Analytics tab the chart is on; names the saved file: Ivk8-<tab>-<date>.pdf */
+  tab: string;
   /** Context lines under the title: the range, interval, filters. */
   meta?: string[];
   /** Where the data came from: the login and the backup file. */
@@ -18,12 +20,12 @@ const SHEET_CSS = `
 :root { --viz-muted:#6b6963; --viz-grid:#d9dce5; --card:#fff; --fg:#1d2330; --muted:#5b6275; --border:#d5d9e3; --accent:#4f6bed;
   --series-1:#2a78d6; --series-2:#eb6834; --series-3:#1baf7a; --series-4:#eda100; --series-5:#e87ba4; --series-6:#008300; --series-7:#4a3aa7; --series-8:#e34948;
   --zone-ok:#1baf7a; --zone-over:#e34948; }
-@page { size: letter landscape; margin: 0.5in; }
+@page { size: A4 landscape; margin: 0.5in; }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: #fff; color: var(--fg); font: 11pt/1.4 system-ui, sans-serif;
   -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-/* One sheet: the page is the content box (letter landscape 11in x 8.5in minus margins). */
-.sheet { height: 7.5in; display: flex; flex-direction: column; overflow: hidden; page-break-after: avoid; break-inside: avoid; }
+/* One sheet: the page is the content box (A4 landscape 297mm x 210mm minus margins). */
+.sheet { height: 183mm; display: flex; flex-direction: column; overflow: hidden; page-break-after: avoid; break-inside: avoid; }
 .letterhead { display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: 8pt; border-bottom: 2pt solid var(--accent); }
 .brand { font-size: 20pt; font-weight: 700; letter-spacing: -0.01em; }
 .brand small { display: block; font-size: 9pt; font-weight: 400; color: var(--muted); letter-spacing: 0; }
@@ -35,10 +37,11 @@ h1 + .source { margin: 0 0 2pt; font-size: 10.5pt; }
 .meta { margin: 0 0 6pt; font-size: 9.5pt; color: var(--muted); }
 .meta span + span::before { content: ' · '; }
 .body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6pt; }
-.figure { flex: 1; min-height: 0; display: flex; }
-.figure > .chart { flex: 1; min-height: 0; width: 100%; height: auto; margin: 0; }
-.figure .recharts-wrapper { width: 100% !important; height: 100% !important; }
-.figure svg { width: 100%; height: 100%; }
+.figure { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+/* No percentage heights: the svg keeps its own aspect ratio and is capped so the legend still fits on the page. */
+.figure .chart, .figure .recharts-responsive-container, .figure .recharts-wrapper { width: 100% !important; height: auto !important; margin: 0; }
+/* Only the plot itself: legend icons are tiny svgs of their own. Recharts also sets inline width/height on it. */
+.figure .recharts-wrapper > svg { display: block; width: 100% !important; height: auto !important; max-height: 112mm; }
 .budget-sum { margin: 0; font-size: 10pt; color: var(--muted); }
 .chart-key, .pick-legend ul { list-style: none; display: flex; flex-wrap: wrap; gap: 2pt 14pt; padding: 0; margin: 0; font-size: 9pt; }
 .pick-legend { border: 0; padding: 0; margin: 0; min-width: 0; }
@@ -77,13 +80,20 @@ function collect(scope: Element): string {
     if (live.classList.contains('chart')) {
       // Drop hover-only overlays and the tooltip, then let the svg scale to the sheet via its viewBox.
       copy.querySelectorAll('.recharts-tooltip-wrapper, [aria-hidden="true"] text').forEach((n) => n.remove());
-      const liveSvg = live.querySelector('svg.recharts-surface');
-      const svg = copy.querySelector('svg.recharts-surface');
+      // Recharts nests the plot in a zero-size box, which would make every percentage size inside it zero.
+      const wrapper = copy.querySelector('.recharts-wrapper');
+      if (wrapper) {
+        wrapper.removeAttribute('style');
+        copy.replaceChildren(wrapper);
+      }
+      const liveSvg = live.querySelector('.recharts-wrapper > svg');
+      const svg = copy.querySelector('.recharts-wrapper > svg');
       if (liveSvg && svg) {
         const { width, height } = liveSvg.getBoundingClientRect();
         if (!svg.getAttribute('viewBox')) svg.setAttribute('viewBox', `0 0 ${Math.round(width)} ${Math.round(height)}`);
         svg.removeAttribute('width');
         svg.removeAttribute('height');
+        svg.removeAttribute('style');
         svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
       }
       copy.removeAttribute('style');
@@ -107,16 +117,20 @@ function collect(scope: Element): string {
   return parts.join('\n');
 }
 
-/** Prints one landscape Letter page: project letterhead, the chart and its legends. */
+/** Prints one landscape A4 page: project letterhead, the chart and its legends. */
 export function printChart(scope: Element, spec: PrintSpec): void {
   const body = collect(scope);
   const source = [spec.source?.file && `Backup: <b>${esc(spec.source.file)}</b>`, spec.source?.email && `Account: <b>${esc(spec.source.email)}</b>`]
     .filter(Boolean)
     .map((s) => `<span>${s}</span>`)
     .join('');
+  const d = new Date();
+  const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  // Browsers propose the page title as the PDF's file name (the extension is added by the browser).
+  const fileName = `Ivk8-${spec.tab.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${day}`;
   const now = new Date().toLocaleString(undefined, { dateStyle: 'long', timeStyle: 'short' });
   const meta = (spec.meta ?? []).filter(Boolean).map((m) => `<span>${esc(m)}</span>`).join('');
-  const doc = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(spec.title)} · Ivy Wallet Plus</title><style>${SHEET_CSS}</style></head><body>
+  const doc = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(fileName)}</title><style>${SHEET_CSS}</style></head><body>
 <div class="sheet">
   <header class="letterhead">
     <div class="brand">Ivy Wallet Plus<small>Personal finance dashboard for Ivy Wallet backups</small></div>
@@ -137,7 +151,13 @@ export function printChart(scope: Element, spec: PrintSpec): void {
   frame.onload = () => {
     const win = frame.contentWindow;
     if (!win) return frame.remove();
-    win.addEventListener('afterprint', () => frame.remove());
+    // Chrome names the PDF after the top page's title, so borrow it for the length of the dialog.
+    const pageTitle = document.title;
+    document.title = fileName;
+    win.addEventListener('afterprint', () => {
+      document.title = pageTitle;
+      frame.remove();
+    });
     win.focus();
     win.print();
   };
@@ -148,7 +168,7 @@ export function printChart(scope: Element, spec: PrintSpec): void {
  * Print button for a tab with a chart. Prints the chart, its headline and legends found in the nearest card,
  * so place it inside the tab and call it with whatever describes the current view.
  */
-export function PrintButton({ title, meta }: PrintSpec) {
+export function PrintButton({ title, tab, meta }: PrintSpec) {
   const ref = useRef<HTMLButtonElement>(null);
   const fileId = useContext(BackupIdContext);
   const email = useMe().data?.email;
@@ -161,7 +181,7 @@ export function PrintButton({ title, meta }: PrintSpec) {
       title="Print this chart on one landscape page"
       onClick={() => {
         const scope = ref.current?.closest('.card');
-        if (scope) printChart(scope, { title, meta, source: { email, file } });
+        if (scope) printChart(scope, { title, tab, meta, source: { email, file } });
       }}
     >
       🖨 Print chart
