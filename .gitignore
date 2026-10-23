@@ -21,6 +21,9 @@ backups/
 .vscode/
 .claude/settings.json
 
+# host-specific cluster fix scripts (this network's addresses and MACs)
+ops/stability/
+
 # blog notes, transcript archive and capture skill (private; posts are published from the website repo)
 blog/
 .claude/skills/blog-capture/
