@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { BalancesData, TransactionRow } from '@ivy/contracts';
 import { useReport } from '../api/hooks';
 import { useParams } from '../state/params';
@@ -14,7 +14,7 @@ import { ProjectedTab } from '../components/ProjectedTab';
 import { TagsTab } from '../components/TagsTab';
 import { ReportsTab } from '../components/ReportsTab';
 import { DEFAULT_CONFIG, type ReportConfig } from '../reports';
-import { RangePicker, SummaryTab, TrendsTab, presetRange, type DateRange } from '../components/FlowReports';
+import { Kpi, RangePicker, SummaryTab, TrendsTab, presetRange, type DateRange } from '../components/FlowReports';
 
 const TABS = ['Transactions', 'Balances', 'Income & expense', 'Trends', 'Budgets', 'Projected', 'Tags', 'Reports', 'Payees', 'Rates & timezone'] as const;
 type Tab = (typeof TABS)[number];
@@ -69,17 +69,33 @@ function BalancesTab({ fileId }: { fileId: string }) {
   if (!r.data) return <p className="muted">Loading…</p>;
   const { data, baseCurrency } = r.data;
   const chart = data.accounts.filter((a) => a.includeInBalance && a.base != null).map((a) => ({ name: a.name, value: a.base }));
+  const counted = data.accounts.filter((a) => a.includeInBalance && a.base != null);
+  const assets = counted.reduce((s, a) => s + Math.max(a.base!, 0), 0);
+  const liabilities = counted.reduce((s, a) => s + Math.min(a.base!, 0), 0);
   return (
     <>
       <label>As of <input type="date" value={asOf} onChange={(e) => setAsOf(e.target.value)} /></label>
       <PrintButton tab="Balances" title={`Balances: net worth ${fmtMoney(data.netWorth, baseCurrency)}`} meta={[asOf ? `As of ${asOf}` : 'As of today']} />
-      <h3>Net worth: {fmtMoney(data.netWorth, baseCurrency)}</h3>
+      <div className="kpis">
+        <Kpi label="Net worth" value={fmtMoney(data.netWorth, baseCurrency)} />
+        <Kpi label="Assets" value={fmtMoney(assets, baseCurrency)} />
+        <Kpi label="Liabilities" value={fmtMoney(liabilities, baseCurrency)} />
+        <Kpi label="Accounts" value={String(counted.length)} note={`of ${data.accounts.length}`} />
+      </div>
       {data.unconverted.length > 0 && (
         <div className="callout warn">Excluded from net worth (no rate): {data.unconverted.join(', ')}. Add an override under “Rates & timezone”.</div>
       )}
       <div className="chart">
         <ResponsiveContainer>
-          <BarChart data={chart}><XAxis dataKey="name" /><YAxis /><Tooltip /><Bar dataKey="value" fill="#4f6bed" /></BarChart>
+          <BarChart data={chart}>
+            <XAxis dataKey="name" tickLine={false} axisLine={false} tickMargin={6} orientation="bottom" height={30} />
+            <YAxis />
+            <Tooltip formatter={(v) => fmtMoney(Number(v), baseCurrency)} />
+            <ReferenceLine y={0} stroke="#9aa2b5" />
+            <Bar dataKey="value">
+              {chart.map((d) => <Cell key={d.name} fill={(d.value ?? 0) < 0 ? '#f59e42' : '#4f6bed'} />)}
+            </Bar>
+          </BarChart>
         </ResponsiveContainer>
       </div>
       <table className="grid">

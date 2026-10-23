@@ -5,6 +5,7 @@ import {
 } from '@tanstack/react-table';
 import type { TransactionRow } from '@ivy/contracts';
 import { fmtDate, fmtMoney } from '../format';
+import { Kpi } from './FlowReports';
 
 const col = createColumnHelper<TransactionRow>();
 
@@ -36,10 +37,15 @@ export function TransactionsTable({ rows, base, tz }: { rows: TransactionRow[]; 
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
   });
+  const shown = table.getFilteredRowModel().rows.map((r) => r.original);
   return (
     <>
       <input className="filter" placeholder="Filter…" value={filter} onChange={(e) => setFilter(e.target.value)} />
-      <p className="muted">{table.getRowModel().rows.length} of {rows.length} transactions</p>
+      <div className="kpis">
+        <Kpi label="Transactions" value={String(shown.length)} note={`of ${rows.length}`} />
+        <Kpi label="Executed" value={String(shown.filter((r) => r.status === 'EXECUTED').length)} />
+        <Kpi label="Planned" value={String(shown.filter((r) => r.status === 'PLANNED').length)} />
+      </div>
       <div className="scroll">
         <table className="grid">
           <thead>

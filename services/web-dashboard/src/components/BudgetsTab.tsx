@@ -5,7 +5,7 @@ import type { BudgetTimeseriesData, BudgetsData, Granularity } from '@ivy/contra
 import { useReport } from '../api/hooks';
 import { PrintButton, rangeText } from '../print';
 import { ErrorBox } from './ErrorBox';
-import { SERIES, Unconverted, type DateRange } from './FlowReports';
+import { Kpi, SERIES, Unconverted, type DateRange } from './FlowReports';
 import { fmtMoney, fmtPct } from '../format';
 
 const AVG_BUCKET = 'Average';
@@ -195,6 +195,16 @@ export function BudgetsTab({ fileId, range }: { fileId: string; range: DateRange
       {r.data && view && (
         <>
           <Unconverted list={r.data.data.unconverted} />
+          <div className="kpis">
+            <Kpi label="Spent" value={fmtMoney(grand, base)} note={allowed > 0 ? `${fmtPct(grand, allowed)} of the allotment` : undefined} />
+            <Kpi label="Allotted" value={fmtMoney(allowed, base)} />
+            <Kpi label={grand > allowed ? 'Over by' : 'Left'} value={fmtMoney(Math.abs(allowed - grand), base)} />
+            <Kpi
+              label={`Average per ${granularity.toLowerCase()}`}
+              value={fmtMoney(periods.length ? grand / periods.length : 0, base)}
+              note={`over ${periods.length} ${granularity.toLowerCase()}${periods.length === 1 ? '' : 's'}`}
+            />
+          </div>
           <p className="budget-sum">
             Spent {fmtMoney(grand, base)} against {fmtMoney(allowed, base)} allotted over {periods.length} {granularity.toLowerCase()}
             {periods.length === 1 ? '' : 's'}

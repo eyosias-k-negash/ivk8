@@ -6,7 +6,7 @@ import { useReport } from '../api/hooks';
 import { useParams } from '../state/params';
 import { PrintButton, rangeText } from '../print';
 import { ErrorBox } from './ErrorBox';
-import { RelativeRange, SERIES, Unconverted, type DateRange } from './FlowReports';
+import { Kpi, RelativeRange, SERIES, Unconverted, type DateRange } from './FlowReports';
 import { fmtMoney, fmtPct, offsetMs } from '../format';
 
 const OTHER = '__other';
@@ -399,6 +399,12 @@ function PlannedProjection({ fileId, range, granularity }: { fileId: string; ran
   return (
     <>
       <Unconverted list={r.data.data.unconverted} />
+      <div className="kpis">
+        <Kpi label="Planned income" value={fmtMoney(incomeTotal, base)} />
+        <Kpi label="Planned expense" value={fmtMoney(expenseTotal, base)} />
+        <Kpi label="Planned net" value={fmtMoney(incomeTotal - expenseTotal, base)} />
+        <Kpi label="Net worth at end" value={fmtMoney(last.netWorth, base)} note={`from ${fmtMoney(r.data.data.startingNetWorth, base)} at the start`} />
+      </div>
       <p className="budget-sum">
         Planned income {fmtMoney(incomeTotal, base)} and expense {fmtMoney(expenseTotal, base)}: net worth goes from{' '}
         {fmtMoney(r.data.data.startingNetWorth, base)} to {fmtMoney(last.netWorth, base)}. Overdue planned items are assumed to happen on their due date.
@@ -455,6 +461,13 @@ function AverageProjection({ fileId, to, granularity, lookback }: { fileId: stri
   return (
     <>
       <Unconverted list={d.unconverted} />
+      <div className="kpis">
+        <Kpi label={`Average income per ${unit}`} value={fmtMoney(incomeAvg, base)} />
+        <Kpi label={`Average expense per ${unit}`} value={fmtMoney(expenseAvg, base)} />
+        <Kpi label={`Average net per ${unit}`} value={fmtMoney(incomeAvg - expenseAvg, base)} />
+        <Kpi label="Net worth today" value={fmtMoney(d.currentNetWorth, base)} />
+        <Kpi label={`Net worth by ${to}`} value={fmtMoney(last?.netWorth ?? d.currentNetWorth, base)} />
+      </div>
       <p className="budget-sum">
         {d.windowUsed ? (
           <>

@@ -159,13 +159,15 @@ export function SummaryTab({ fileId, range }: { fileId: string; range: DateRange
         <Kpi label="Transactions" value={String(s.count)} />
       </div>
       <Unconverted list={s.unconverted} />
+      <IncomeExpenseChart fileId={fileId} range={range} />
       <p className="muted">
         Executed only; planned payments are not counted. Income and expense on accounts excluded from the balance are left out. A
         transfer to or from an excluded account counts as expense or income under its category; transfers between included accounts never
         count.
       </p>
 
-      <h3>By category</h3>
+      <details open>
+        <summary><h3 style={{ display: 'inline' }}>By category</h3></summary>
       <table className="grid">
         <thead><tr><th>Category</th><th className="num">Income</th><th className="num">Expense</th><th className="num">Net</th></tr></thead>
         <tbody>
@@ -179,8 +181,10 @@ export function SummaryTab({ fileId, range }: { fileId: string; range: DateRange
           ))}
         </tbody>
       </table>
+      </details>
 
-      <h3>By account</h3>
+      <details open>
+        <summary><h3 style={{ display: 'inline' }}>By account</h3></summary>
       <table className="grid">
         <thead>
           <tr><th>Account</th><th className="num">Income</th><th className="num">Expense</th><th className="num">Net ({base})</th></tr>
@@ -202,6 +206,84 @@ export function SummaryTab({ fileId, range }: { fileId: string; range: DateRange
           ))}
         </tbody>
       </table>
+      </details>
+    </>
+  );
+}
+
+/** Income vs expense per interval, with a trailing average bar. No breakdowns; see Trends for those. */
+function IncomeExpenseChart({ fileId, range }: { fileId: string; range: DateRange }) {
+  const [granularity, setGranularity] = useState<Granularity>('MONTH');
+  const r = useReport<TimeseriesData>(fileId, 'timeseries', { from: range.from, to: range.to, granularity, groupBy: 'none' });
+  const view = useMemo(() => {
+    if (!r.data) return null;
+    const v = shape(r.data.data, 'expense', [], new Map(), true);
+    return { ...v, rows: withAverage(v) };
+  }, [r.data]);
+  const base = r.data?.baseCurrency ?? '';
+
+  return (
+    <>
+      <div className="controls">
+        <label>
+          Interval{' '}
+          <select value={granularity} onChange={(e) => setGranularity(e.target.value as Granularity)}>
+            <option value="DAY">Day</option>
+            <option value="WEEK">Week (Mon)</option>
+            <option value="MONTH">Month</option>
+            <option value="YEAR">Year</option>
+          </select>
+        </label>
+        <PrintButton tab="Income & expense" title="Income and expense" meta={[rangeText(range), `Per ${granularity.toLowerCase()}`]} />
+      </div>
+      {r.error && <ErrorBox error={r.error} />}
+      {!r.data && !r.error && <p className="muted">Loading…</p>}
+      {r.data && view && (
+        <>
+          <div className="chart" role="img" aria-label={`Income and expense per ${granularity.toLowerCase()}`}>
+            <ResponsiveContainer>
+              <BarChart data={view.rows} barGap={2} barCategoryGap="20%">
+                <CartesianGrid vertical={false} stroke="var(--viz-grid)" />
+                <XAxis dataKey="bucket" tick={{ fill: 'var(--viz-muted)', fontSize: 12 }} stroke="var(--viz-grid)" />
+                <YAxis tick={{ fill: 'var(--viz-muted)', fontSize: 12 }} stroke="var(--viz-grid)" width={72} />
+                <Tooltip
+                  cursor={{ fill: 'var(--viz-grid)', opacity: 0.4 }}
+                  contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--fg)' }}
+                  itemStyle={{ color: 'var(--fg)' }}
+                  labelStyle={{ color: 'var(--fg)', fontWeight: 600 }}
+                  formatter={(v) => fmtMoney(Number(v), base)}
+                />
+                <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v) => <span style={{ color: 'var(--fg)' }}>{v}</span>} />
+                {view.series.map((s) => (
+                  <Bar key={s.key} dataKey={s.key} name={s.label} fill={s.color} radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                    {/* The trailing average bar is dimmed so it reads as a summary, not a period. */}
+                    {view.rows.map((row) => (
+                      <Cell key={row.bucket as string} fillOpacity={row.bucket === AVG_BUCKET ? 0.55 : 1} />
+                    ))}
+                  </Bar>
+                ))}
+                <CursorValue base={base} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <details>
+            <summary>Show as table</summary>
+            <div className="scroll">
+              <table className="grid">
+                <thead><tr><th>Period</th>{view.series.map((s) => <th key={s.key} className="num">{s.label}</th>)}</tr></thead>
+                <tbody>
+                  {view.rows.map((row) => (
+                    <tr key={row.bucket as string}>
+                      <td>{row.bucket}</td>
+                      {view.series.map((s) => <td key={s.key} className="num">{fmtMoney(Number(row[s.key] ?? 0), base)}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </>
+      )}
     </>
   );
 }
@@ -217,6 +299,41 @@ export function Kpi({ label, value, note }: { label: string; value: string; note
 }
 
 // ---------- Trends (timeseries) ----------
+
+/** Whole-range figures for the Trends tab; independent of which groups are picked for the chart. */
+function TrendKpis({ data, base, metric, unit }: { data: TimeseriesData; base: string; metric: Metric; unit: string }) {
+  const perBucket = new Map<string, { income: number; expense: number }>();
+  for (const p of data.points) {
+    const b = perBucket.get(p.bucket) ?? { income: 0, expense: 0 };
+    b.income += p.income;
+    b.expense += p.expense;
+    perBucket.set(p.bucket, b);
+  }
+  const n = perBucket.size;
+  const income = [...perBucket.values()].reduce((s, b) => s + b.income, 0);
+  const expense = [...perBucket.values()].reduce((s, b) => s + b.expense, 0);
+  const avg = (v: number) => fmtMoney(n ? v / n : 0, base);
+  const periods = `${n} ${unit}${n === 1 ? '' : 's'}`;
+  if (data.groupBy === 'none') {
+    return (
+      <div className="kpis">
+        <Kpi label="Income" value={fmtMoney(income, base)} note={`${avg(income)} per ${unit} over ${periods}`} />
+        <Kpi label="Expense" value={fmtMoney(expense, base)} note={`${avg(expense)} per ${unit} over ${periods}`} />
+        <Kpi label="Net" value={fmtMoney(income - expense, base)} note={`${avg(income - expense)} per ${unit}`} />
+      </div>
+    );
+  }
+  const total = metric === 'expense' ? expense : income;
+  let peak: { bucket: string; value: number } | null = null;
+  for (const [bucket, b] of perBucket) if (!peak || b[metric] > peak.value) peak = { bucket, value: b[metric] };
+  return (
+    <div className="kpis">
+      <Kpi label={`Total ${metric}`} value={fmtMoney(total, base)} />
+      <Kpi label={`Average per ${unit}`} value={avg(total)} note={`over ${periods}`} />
+      {peak && peak.value > 0 && <Kpi label={`Highest ${unit}`} value={fmtMoney(peak.value, base)} note={peak.bucket} />}
+    </div>
+  );
+}
 
 // The validated palette has 8 hues; a 9th distinct series would need a generated hue, so the
 // cap on picked groups is the palette size and everything unpicked folds into "Other" (muted).
@@ -307,6 +424,7 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
       {r.data && view && (
         <>
           <Unconverted list={r.data.data.unconverted} />
+          <TrendKpis data={r.data.data} base={r.data.baseCurrency} metric={metric} unit={granularity.toLowerCase()} />
           <div className="chart" role="img" aria-label={`${view.title} per ${granularity.toLowerCase()}`}>
             <ResponsiveContainer>
               <BarChart data={view.rows} barGap={2} barCategoryGap="20%">
