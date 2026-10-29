@@ -131,7 +131,7 @@ Make the CI jobs required status checks on `main` so a failing gate blocks the m
 | Reports: custom report (filters + income/expense per period, split by category or account) | done, tested |
 | Reports: payees (Tier 1) | route returns `501`; next per plan §7 |
 | drive-sync: OAuth, session, folder, listing, size limit, backoff, proxy + re-ingest | done, tested |
-| Dashboard: transactions, balances, income & expense, breakdowns (charts + table view), rates & timezone | done |
+| Dashboard: transactions, balances, income & expense, breakdowns (charts + table view), trends (calendar patterns: months of the year, weekdays, …), rates & timezone | done |
 | Dashboard: tags (stacked per-tag chart, totals, average per period) | done |
 | Dashboard: reports (account/category scope, and/or condition builder; income above zero and expense below, net line, average bar, table view, matching transactions) | done |
 | Dashboard: payees | tab shows the raw `501` response until the report lands |

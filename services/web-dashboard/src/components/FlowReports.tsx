@@ -340,25 +340,22 @@ function BreakdownKpis({ data, base, metric, unit }: { data: TimeseriesData; bas
 export const SERIES = Array.from({ length: 8 }, (_, i) => `var(--series-${i + 1})`);
 const DEFAULT_PICKS = 5; // leaves a few colors free for the user's own picks
 
-type Metric = 'expense' | 'income';
+export type Metric = 'expense' | 'income';
 /**
  * Picked group id -> palette slot (+ name, for picks with no activity in the current range).
  * Slots stick to the group, so toggling others never repaints it.
  */
 type Picks = Map<string, { slot: number; name: string }>;
 
-export function BreakdownsTab({ fileId, range }: { fileId: string; range: DateRange }) {
-  const [granularity, setGranularity] = useState<Granularity>('MONTH');
-  const [groupBy, setGroupBy] = useState<GroupBy>('none');
-  const [metric, setMetric] = useState<Metric>('expense');
-  const r = useReport<TimeseriesData>(fileId, 'timeseries', { from: range.from, to: range.to, granularity, groupBy });
-
-  // The user's picks belong to the split they were made for: changing "Split by" (or Reset) falls
-  // back to the defaults (top groups by total). Range, metric and interval changes keep them.
+/**
+ * Which groups a split chart shows in their own color, and whether the rest show as "Other". The user's picks belong
+ * to the split they were made for: changing "Split by" (or Reset) falls back to the defaults (top groups by total).
+ * Anything else (range, metric, interval) keeps them.
+ */
+export function usePicks(groups: Group[], groupBy: GroupBy) {
   const [custom, setCustom] = useState<{ groupBy: GroupBy; picks: Picks } | null>(null);
   // Unchecking "Other" leaves the unpicked groups out of the chart instead of folding them into it.
   const [showOther, setShowOther] = useState(true);
-  const groups = useMemo(() => (r.data ? groupTotals(r.data.data, metric) : []), [r.data, metric]);
   const picks = useMemo<Picks>(
     () =>
       custom?.groupBy === groupBy
@@ -377,6 +374,26 @@ export function BreakdownsTab({ fileId, range }: { fileId: string; range: DateRa
     }
     setCustom({ groupBy, picks: next });
   };
+  return {
+    picks,
+    showOther,
+    toggle,
+    toggleOther: () => setShowOther((v) => !v),
+    reset: () => {
+      setCustom(null);
+      setShowOther(true);
+    },
+  };
+}
+
+export function BreakdownsTab({ fileId, range }: { fileId: string; range: DateRange }) {
+  const [granularity, setGranularity] = useState<Granularity>('MONTH');
+  const [groupBy, setGroupBy] = useState<GroupBy>('none');
+  const [metric, setMetric] = useState<Metric>('expense');
+  const r = useReport<TimeseriesData>(fileId, 'timeseries', { from: range.from, to: range.to, granularity, groupBy });
+
+  const groups = useMemo(() => (r.data ? groupTotals(r.data.data, metric) : []), [r.data, metric]);
+  const { picks, showOther, toggle, toggleOther, reset } = usePicks(groups, groupBy);
 
   const view = useMemo(() => {
     if (!r.data) return null;
@@ -396,23 +413,7 @@ export function BreakdownsTab({ fileId, range }: { fileId: string; range: DateRa
             <option value="YEAR">Year</option>
           </select>
         </label>
-        <label>
-          Split by{' '}
-          <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupBy)}>
-            <option value="none">Nothing (income vs expense)</option>
-            <option value="category">Category</option>
-            <option value="account">Account</option>
-          </select>
-        </label>
-        {groupBy !== 'none' && (
-          <label>
-            Show{' '}
-            <select value={metric} onChange={(e) => setMetric(e.target.value as Metric)}>
-              <option value="expense">Expense</option>
-              <option value="income">Income</option>
-            </select>
-          </label>
-        )}
+        <SplitControls groupBy={groupBy} onGroupBy={setGroupBy} metric={metric} onMetric={setMetric} />
         <PrintButton
           tab="Breakdowns"
           title={view?.title ?? 'Breakdowns'}
@@ -425,90 +426,128 @@ export function BreakdownsTab({ fileId, range }: { fileId: string; range: DateRa
         <>
           <Unconverted list={r.data.data.unconverted} />
           <BreakdownKpis data={r.data.data} base={r.data.baseCurrency} metric={metric} unit={granularity.toLowerCase()} />
-          <div className="chart" role="img" aria-label={`${view.title} per ${granularity.toLowerCase()}`}>
-            <ResponsiveContainer>
-              <BarChart data={view.rows} barGap={2} barCategoryGap="20%">
-                <CartesianGrid vertical={false} stroke="var(--viz-grid)" />
-                <XAxis dataKey="bucket" tick={{ fill: 'var(--viz-muted)', fontSize: 12 }} stroke="var(--viz-grid)" />
-                <YAxis tick={{ fill: 'var(--viz-muted)', fontSize: 12 }} stroke="var(--viz-grid)" width={72} />
-                <Tooltip
-                  cursor={{ fill: 'var(--viz-grid)', opacity: 0.4 }}
-                  contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--fg)' }}
-                  itemStyle={{ color: 'var(--fg)' }}
-                  labelStyle={{ color: 'var(--fg)', fontWeight: 600 }}
-                  itemSorter={(item) => -Number(item.value ?? 0)}
-                  // Stacked bars: each item's share of that period's bar, with the bar total in the header.
-                  labelFormatter={(label, payload) =>
-                    view.stacked && payload?.[0]
-                      ? `${label} · ${fmtMoney(rowTotal(payload[0].payload, view), r.data!.baseCurrency)}`
-                      : label
-                  }
-                  formatter={(v, _name, item) =>
-                    view.stacked
-                      ? `${fmtMoney(Number(v), r.data!.baseCurrency)} (${fmtPct(Number(v), rowTotal(item.payload, view))})`
-                      : fmtMoney(Number(v), r.data!.baseCurrency)
-                  }
-                />
-                {/* Text wears text tokens; the swatch beside it carries identity. */}
-                {!view.stacked && <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v) => <span style={{ color: 'var(--fg)' }}>{v}</span>} />}
-                {view.series.map((s, i) => (
-                  <Bar
-                    key={s.key}
-                    dataKey={s.key}
-                    name={s.label}
-                    fill={s.color}
-                    stackId={view.stacked ? 'g' : undefined}
-                    stroke={view.stacked ? 'var(--card)' : undefined}
-                    strokeWidth={view.stacked ? 2 : 0}
-                    radius={!view.stacked || i === view.series.length - 1 ? [4, 4, 0, 0] : 0}
-                    isAnimationActive={false}
-                  >
-                    {/* The trailing average bar is dimmed so it reads as a summary, not a period. */}
-                    {view.rows.map((row) => (
-                      <Cell key={row.bucket as string} fillOpacity={row.bucket === AVG_BUCKET ? 0.55 : 1} />
-                    ))}
-                  </Bar>
-                ))}
-                <CursorValue base={r.data.baseCurrency} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <FlowChart view={view} base={r.data.baseCurrency} label={`${view.title} per ${granularity.toLowerCase()}`} />
           {view.stacked && (
             <PickLegend
               groups={groups}
               picks={picks}
               base={r.data.baseCurrency}
               showOther={showOther}
-              onToggleOther={() => setShowOther((v) => !v)}
+              onToggleOther={toggleOther}
               onToggle={toggle}
-              onReset={() => {
-                setCustom(null);
-                setShowOther(true);
-              }}
+              onReset={reset}
             />
           )}
-          {/* Table view: the accessible/precise counterpart of the chart. */}
-          <details>
-            <summary>Show as table</summary>
-            <div className="scroll">
-              <table className="grid">
-                <thead>
-                  <tr><th>Period</th>{view.series.map((s) => <th key={s.key} className="num">{s.label}</th>)}</tr>
-                </thead>
-                <tbody>
-                  {view.rows.map((row) => (
-                    <tr key={row.bucket as string}>
-                      <td>{row.bucket}</td>
-                      {view.series.map((s) => <td key={s.key} className="num">{fmtMoney(Number(row[s.key] ?? 0), r.data!.baseCurrency)}</td>)}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </details>
+          <FlowTable view={view} base={r.data.baseCurrency} />
         </>
       )}
     </>
+  );
+}
+
+/** "Split by" and, for a split, which side of the money to show. */
+export function SplitControls({ groupBy, onGroupBy, metric, onMetric }: {
+  groupBy: GroupBy;
+  onGroupBy: (g: GroupBy) => void;
+  metric: Metric;
+  onMetric: (m: Metric) => void;
+}) {
+  return (
+    <>
+      <label>
+        Split by{' '}
+        <select value={groupBy} onChange={(e) => onGroupBy(e.target.value as GroupBy)}>
+          <option value="none">Nothing (income vs expense)</option>
+          <option value="category">Category</option>
+          <option value="account">Account</option>
+        </select>
+      </label>
+      {groupBy !== 'none' && (
+        <label>
+          Show{' '}
+          <select value={metric} onChange={(e) => onMetric(e.target.value as Metric)}>
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+          </select>
+        </label>
+      )}
+    </>
+  );
+}
+
+/** Bars per period from shape() + withAverage(): income vs expense side by side, or one stack per period for a split. */
+export function FlowChart({ view, base, label }: { view: View; base: string; label: string }) {
+  // Card-colored seams between stacked segments; past ~60 bars each bar is a few pixels wide and the seams would hide it.
+  const seams = view.stacked && view.rows.length <= 60;
+  return (
+    <div className="chart" role="img" aria-label={label}>
+      <ResponsiveContainer>
+        <BarChart data={view.rows} barGap={2} barCategoryGap="20%">
+          <CartesianGrid vertical={false} stroke="var(--viz-grid)" />
+          <XAxis dataKey="bucket" tick={{ fill: 'var(--viz-muted)', fontSize: 12 }} stroke="var(--viz-grid)" />
+          <YAxis tick={{ fill: 'var(--viz-muted)', fontSize: 12 }} stroke="var(--viz-grid)" width={72} />
+          <Tooltip
+            cursor={{ fill: 'var(--viz-grid)', opacity: 0.4 }}
+            contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--fg)' }}
+            itemStyle={{ color: 'var(--fg)' }}
+            labelStyle={{ color: 'var(--fg)', fontWeight: 600 }}
+            itemSorter={(item) => -Number(item.value ?? 0)}
+            // Stacked bars: each item's share of that period's bar, with the bar total in the header.
+            labelFormatter={(label, payload) =>
+              view.stacked && payload?.[0] ? `${label} · ${fmtMoney(rowTotal(payload[0].payload, view), base)}` : label
+            }
+            formatter={(v, _name, item) =>
+              view.stacked ? `${fmtMoney(Number(v), base)} (${fmtPct(Number(v), rowTotal(item.payload, view))})` : fmtMoney(Number(v), base)
+            }
+          />
+          {/* Text wears text tokens; the swatch beside it carries identity. */}
+          {!view.stacked && <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v) => <span style={{ color: 'var(--fg)' }}>{v}</span>} />}
+          {view.series.map((s, i) => (
+            <Bar
+              key={s.key}
+              dataKey={s.key}
+              name={s.label}
+              fill={s.color}
+              stackId={view.stacked ? 'g' : undefined}
+              stroke={seams ? 'var(--card)' : undefined}
+              strokeWidth={seams ? 2 : 0}
+              radius={!view.stacked || i === view.series.length - 1 ? [4, 4, 0, 0] : 0}
+              isAnimationActive={false}
+            >
+              {/* The trailing average bar is dimmed so it reads as a summary, not a period. */}
+              {view.rows.map((row) => (
+                <Cell key={row.bucket as string} fillOpacity={row.bucket === AVG_BUCKET ? 0.55 : 1} />
+              ))}
+            </Bar>
+          ))}
+          <CursorValue base={base} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+/** Table view: the accessible/precise counterpart of FlowChart. */
+export function FlowTable({ view, base, head = 'Period' }: { view: View; base: string; head?: string }) {
+  return (
+    <details>
+      <summary>Show as table</summary>
+      <div className="scroll">
+        <table className="grid">
+          <thead>
+            <tr><th>{head}</th>{view.series.map((s) => <th key={s.key} className="num">{s.label}</th>)}</tr>
+          </thead>
+          <tbody>
+            {view.rows.map((row) => (
+              <tr key={row.bucket as string}>
+                <td>{row.bucket}</td>
+                {view.series.map((s) => <td key={s.key} className="num">{fmtMoney(Number(row[s.key] ?? 0), base)}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
   );
 }
 
@@ -526,7 +565,7 @@ interface Group {
 }
 
 /** Per-group totals over the whole range, largest first. Groups with nothing to show are dropped. */
-function groupTotals(d: TimeseriesData, metric: Metric): Group[] {
+export function groupTotals(d: TimeseriesData, metric: Metric): Group[] {
   if (d.groupBy === 'none') return [];
   const totals = new Map<string, Group>();
   for (const p of d.points) {
@@ -538,8 +577,12 @@ function groupTotals(d: TimeseriesData, metric: Metric): Group[] {
   return [...totals.values()].filter((g) => g.total > 0).sort((a, b) => b.total - a.total);
 }
 
-/** Pivot API points into chart rows. Grouped views show the picked groups and fold the rest into "Other". */
-function shape(d: TimeseriesData, metric: Metric, groups: Group[], picks: Picks, showOther: boolean): View {
+/**
+ * Pivot API points into chart rows. Grouped views show the picked groups and fold the rest into "Other".
+ * Given `buckets`, a grouped view has a row for each of them, in that order, even an empty one; otherwise
+ * only buckets with money get a row, sorted by key.
+ */
+export function shape(d: TimeseriesData, metric: Metric, groups: Group[], picks: Picks, showOther: boolean, buckets?: string[]): View {
   if (d.groupBy === 'none') {
     return {
       title: 'Income and expense',
@@ -552,7 +595,7 @@ function shape(d: TimeseriesData, metric: Metric, groups: Group[], picks: Picks,
     };
   }
 
-  const rowsByBucket = new Map<string, Record<string, string | number>>();
+  const rowsByBucket = new Map<string, Record<string, string | number>>((buckets ?? []).map((b) => [b, { bucket: b }]));
   for (const p of d.points) {
     const row = rowsByBucket.get(p.bucket) ?? { bucket: p.bucket };
     const id = p.groupId ?? '?';
@@ -572,14 +615,14 @@ function shape(d: TimeseriesData, metric: Metric, groups: Group[], picks: Picks,
     title: metric === 'expense' ? 'Expense' : 'Income',
     stacked: true,
     series,
-    rows: [...rowsByBucket.values()].sort((a, b) => String(a.bucket).localeCompare(String(b.bucket))),
+    rows: buckets ? [...rowsByBucket.values()] : [...rowsByBucket.values()].sort((a, b) => String(a.bucket).localeCompare(String(b.bucket))),
   };
 }
 
 const AVG_BUCKET = 'Average';
 
 /** Appends one row holding each shown series' mean over the displayed periods (empty periods count as 0). */
-function withAverage(view: View): View['rows'] {
+export function withAverage(view: View): View['rows'] {
   const n = view.rows.length;
   if (!n) return view.rows;
   // "Other" is not an enabled legend entry, so it gets no average bar.
@@ -597,7 +640,7 @@ function rowTotal(row: Record<string, string | number> | undefined, view: View):
 }
 
 /** Checkbox legend for grouped views: checked groups get their own color, unchecked ones fold into "Other" (itself optional). */
-function PickLegend({ groups, picks, base, showOther, onToggleOther, onToggle, onReset }: {
+export function PickLegend({ groups, picks, base, showOther, onToggleOther, onToggle, onReset }: {
   groups: Group[];
   picks: Picks;
   base: string;

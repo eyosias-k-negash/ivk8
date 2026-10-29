@@ -13,10 +13,11 @@ import { BudgetsTab } from '../components/BudgetsTab';
 import { ProjectedTab } from '../components/ProjectedTab';
 import { TagsTab } from '../components/TagsTab';
 import { ReportsTab } from '../components/ReportsTab';
+import { TrendsTab } from '../components/TrendsTab';
 import { DEFAULT_CONFIG, type ReportConfig } from '../reports';
 import { Kpi, RangePicker, SummaryTab, BreakdownsTab, presetRange, type DateRange } from '../components/FlowReports';
 
-const TABS = ['Transactions', 'Balances', 'Income & expense', 'Breakdowns', 'Budgets', 'Projected', 'Tags', 'Reports', 'Payees', 'Rates & timezone'] as const;
+const TABS = ['Transactions', 'Balances', 'Income & expense', 'Breakdowns', 'Trends', 'Budgets', 'Projected', 'Tags', 'Reports', 'Payees', 'Rates & timezone'] as const;
 type Tab = (typeof TABS)[number];
 
 /** Flows 3–7 for one opened backup. */
@@ -41,9 +42,12 @@ export function BackupView({ fileId, onBack }: { fileId: string; onBack: () => v
       </nav>
       {tab === 'Transactions' && <TransactionsTab fileId={fileId} />}
       {tab === 'Balances' && <BalancesTab fileId={fileId} />}
-      {(tab === 'Income & expense' || tab === 'Breakdowns' || tab === 'Budgets' || tab === 'Tags' || tab === 'Reports') && <RangePicker value={range} onChange={setRange} />}
+      {(tab === 'Income & expense' || tab === 'Breakdowns' || tab === 'Trends' || tab === 'Budgets' || tab === 'Tags' || tab === 'Reports') && (
+        <RangePicker value={range} onChange={setRange} />
+      )}
       {tab === 'Income & expense' && <SummaryTab fileId={fileId} range={range} />}
       {tab === 'Breakdowns' && <BreakdownsTab fileId={fileId} range={range} />}
+      {tab === 'Trends' && <TrendsTab fileId={fileId} range={range} />}
       {tab === 'Budgets' && <BudgetsTab fileId={fileId} range={range} />}
       {tab === 'Projected' && <ProjectedTab fileId={fileId} />}
       {tab === 'Tags' && <TagsTab fileId={fileId} range={range} />}
