@@ -211,7 +211,7 @@ export function SummaryTab({ fileId, range }: { fileId: string; range: DateRange
   );
 }
 
-/** Income vs expense per interval, with a trailing average bar. No breakdowns; see Trends for those. */
+/** Income vs expense per interval, with a trailing average bar. No breakdowns; see Breakdowns for those. */
 function IncomeExpenseChart({ fileId, range }: { fileId: string; range: DateRange }) {
   const [granularity, setGranularity] = useState<Granularity>('MONTH');
   const r = useReport<TimeseriesData>(fileId, 'timeseries', { from: range.from, to: range.to, granularity, groupBy: 'none' });
@@ -298,10 +298,10 @@ export function Kpi({ label, value, note }: { label: string; value: string; note
   );
 }
 
-// ---------- Trends (timeseries) ----------
+// ---------- Breakdowns (timeseries) ----------
 
-/** Whole-range figures for the Trends tab; independent of which groups are picked for the chart. */
-function TrendKpis({ data, base, metric, unit }: { data: TimeseriesData; base: string; metric: Metric; unit: string }) {
+/** Whole-range figures for the Breakdowns tab; independent of which groups are picked for the chart. */
+function BreakdownKpis({ data, base, metric, unit }: { data: TimeseriesData; base: string; metric: Metric; unit: string }) {
   const perBucket = new Map<string, { income: number; expense: number }>();
   for (const p of data.points) {
     const b = perBucket.get(p.bucket) ?? { income: 0, expense: 0 };
@@ -347,7 +347,7 @@ type Metric = 'expense' | 'income';
  */
 type Picks = Map<string, { slot: number; name: string }>;
 
-export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange }) {
+export function BreakdownsTab({ fileId, range }: { fileId: string; range: DateRange }) {
   const [granularity, setGranularity] = useState<Granularity>('MONTH');
   const [groupBy, setGroupBy] = useState<GroupBy>('none');
   const [metric, setMetric] = useState<Metric>('expense');
@@ -414,8 +414,8 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
           </label>
         )}
         <PrintButton
-          tab="Trends"
-          title={view?.title ?? 'Trends'}
+          tab="Breakdowns"
+          title={view?.title ?? 'Breakdowns'}
           meta={[rangeText(range), `Per ${granularity.toLowerCase()}`, groupBy === 'none' ? '' : `Split by ${groupBy} (${metric})`]}
         />
       </div>
@@ -424,7 +424,7 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
       {r.data && view && (
         <>
           <Unconverted list={r.data.data.unconverted} />
-          <TrendKpis data={r.data.data} base={r.data.baseCurrency} metric={metric} unit={granularity.toLowerCase()} />
+          <BreakdownKpis data={r.data.data} base={r.data.baseCurrency} metric={metric} unit={granularity.toLowerCase()} />
           <div className="chart" role="img" aria-label={`${view.title} per ${granularity.toLowerCase()}`}>
             <ResponsiveContainer>
               <BarChart data={view.rows} barGap={2} barCategoryGap="20%">

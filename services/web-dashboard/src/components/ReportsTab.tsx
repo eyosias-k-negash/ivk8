@@ -16,7 +16,7 @@ import {
   type RuleDraft, type Side,
 } from '../reports';
 
-const DEFAULT_PICKS = 5; // as in Trends: leaves a few colors free for the user's own picks
+const DEFAULT_PICKS = 5; // as in Breakdowns: leaves a few colors free for the user's own picks
 const FOLDED_COLOR = 'var(--viz-muted)';
 /** Unsplit, each side keeps one fixed hue: a cool/warm pair, so the two read as opposites. */
 const SIDE_COLOR: Record<Side, string> = { income: SERIES[0]!, expense: SERIES[1]! };
@@ -85,7 +85,7 @@ export function ReportsTab({ fileId, range, config, onChange }: {
   const data = problem ? undefined : r.data?.data;
   const base = r.data?.baseCurrency ?? '';
 
-  // As in Trends, picks belong to the split they were made for; a new split (or Reset) starts from the top groups.
+  // As in Breakdowns, picks belong to the split they were made for; a new split (or Reset) starts from the top groups.
   const [custom, setCustom] = useState<{ groupBy: GroupBy; picks: Picks } | null>(null);
   const groups = useMemo(() => data?.groups ?? [], [data]);
   const split = data?.groupBy ?? 'none';

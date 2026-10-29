@@ -93,7 +93,7 @@ export function shapeTags(d: TagsData, metric: Metric, picked: ReadonlySet<strin
     return row;
   });
 
-  // Mean over the displayed periods (empty periods count as 0), like the Trends tab.
+  // Mean over the displayed periods (empty periods count as 0), like the Breakdowns tab.
   const periods = rows.length;
   if (periods) {
     const avg: TagRow = { bucket: AVG_BUCKET };

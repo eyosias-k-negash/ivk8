@@ -53,7 +53,7 @@ function shape(d: BudgetTimeseriesData, showOther: boolean): { series: Series[];
     return row;
   });
 
-  // Mean over the displayed periods (empty periods count as 0), like the Trends tab.
+  // Mean over the displayed periods (empty periods count as 0), like the Breakdowns tab.
   const n = rows.length;
   if (n) {
     const avg: Row = { bucket: AVG_BUCKET, threshold: rows.reduce((s, r) => s + r.threshold, 0) / n };

@@ -9,7 +9,7 @@ import { Kpi, SERIES, Unconverted, type DateRange } from './FlowReports';
 import { fmtMoney, fmtPct } from '../format';
 import { AVG_BUCKET, OTHER_COMBOS, comboSlots, isCombo, rowTotal, shapeTags, type Metric, type TagRow, type TagSeries, type TagView } from '../tags';
 
-const DEFAULT_PICKS = 5; // as in Trends: leaves a few colors free for the user's own picks
+const DEFAULT_PICKS = 5; // as in Breakdowns: leaves a few colors free for the user's own picks
 const FOLDED_COLOR = 'var(--viz-muted)';
 
 /**
@@ -234,7 +234,7 @@ function TagTooltip({ active, payload, series, base, unit }: {
 
 /**
  * Checkbox legend: checked tags show their own part of the chart and its share; unchecked ones show their own total.
- * Unlike Trends, unchecked tags are left out rather than folded into "Other": the chart is the checked collection.
+ * Unlike Breakdowns, unchecked tags are left out rather than folded into "Other": the chart is the checked collection.
  * Below them, each combination of checked tags that transactions carry together, as in the chart.
  */
 function TagLegend({ tags, metric, picks, view, series, base, onToggle, onReset, onClear }: {
