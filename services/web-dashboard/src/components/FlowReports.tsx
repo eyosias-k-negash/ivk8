@@ -300,8 +300,11 @@ export function Kpi({ label, value, note }: { label: string; value: string; note
 
 // ---------- Breakdowns (timeseries) ----------
 
-/** Whole-range figures for the Breakdowns tab; independent of which groups are picked for the chart. */
-function BreakdownKpis({ data, base, metric, unit }: { data: TimeseriesData; base: string; metric: Metric; unit: string }) {
+/**
+ * Whole-range figures for the Breakdowns tab; independent of which groups are picked for the chart, but `data` comes
+ * without the excluded ones (named under the total).
+ */
+function BreakdownKpis({ data, base, metric, unit, excluded }: { data: TimeseriesData; base: string; metric: Metric; unit: string; excluded: Excluded }) {
   const perBucket = new Map<string, { income: number; expense: number }>();
   for (const p of data.points) {
     const b = perBucket.get(p.bucket) ?? { income: 0, expense: 0 };
@@ -328,7 +331,7 @@ function BreakdownKpis({ data, base, metric, unit }: { data: TimeseriesData; bas
   for (const [bucket, b] of perBucket) if (!peak || b[metric] > peak.value) peak = { bucket, value: b[metric] };
   return (
     <div className="kpis">
-      <Kpi label={`Total ${metric}`} value={fmtMoney(total, base)} />
+      <Kpi label={`Total ${metric}`} value={fmtMoney(total, base)} note={excludingNote(excluded)} />
       <Kpi label={`Average per ${unit}`} value={avg(total)} note={`over ${periods}`} />
       {peak && peak.value > 0 && <Kpi label={`Highest ${unit}`} value={fmtMoney(peak.value, base)} note={peak.bucket} />}
     </div>
@@ -346,36 +349,46 @@ export type Metric = 'expense' | 'income';
  * Slots stick to the group, so toggling others never repaints it.
  */
 type Picks = Map<string, { slot: number; name: string }>;
+/** Excluded group id -> name. Their money is left out of the chart and KPIs altogether, not folded into "Other". */
+type Excluded = ReadonlyMap<string, string>;
+const NONE: Excluded = new Map();
 
 /**
- * Which groups a split chart shows in their own color, and whether the rest show as "Other". The user's picks belong
- * to the split they were made for: changing "Split by" (or Reset) falls back to the defaults (top groups by total).
- * Anything else (range, metric, interval) keeps them.
+ * Which groups a split chart shows in their own color, which it leaves out, and whether the rest show as "Other".
+ * The user's choices belong to the split they were made for: changing "Split by" (or Reset) falls back to the
+ * defaults (top groups by total, nothing excluded). Anything else (range, metric, interval) keeps them.
  */
 export function usePicks(groups: Group[], groupBy: GroupBy) {
-  const [custom, setCustom] = useState<{ groupBy: GroupBy; picks: Picks } | null>(null);
+  const [custom, setCustom] = useState<{ groupBy: GroupBy; picks: Picks; excluded: Excluded } | null>(null);
   // Unchecking "Other" leaves the unpicked groups out of the chart instead of folding them into it.
   const [showOther, setShowOther] = useState(true);
+  const mine = custom?.groupBy === groupBy ? custom : null;
   const picks = useMemo<Picks>(
-    () =>
-      custom?.groupBy === groupBy
-        ? custom.picks
-        : new Map(groups.slice(0, DEFAULT_PICKS).map((g, i) => [g.id, { slot: i, name: g.name }])),
-    [custom, groupBy, groups],
+    () => mine?.picks ?? new Map(groups.slice(0, DEFAULT_PICKS).map((g, i) => [g.id, { slot: i, name: g.name }])),
+    [mine, groups],
   );
+  const excluded = mine?.excluded ?? NONE;
+  const included = useMemo(() => groups.filter((g) => !excluded.has(g.id)), [groups, excluded]);
+  // Each click moves a group on: own color -> folded into "Other" -> excluded -> own color. With every color
+  // in use, an excluded group goes back to "Other" instead.
   const toggle = (g: Group) => {
-    const next = new Map(picks);
-    if (next.has(g.id)) next.delete(g.id);
+    const nextPicks = new Map(picks);
+    const nextExcluded = new Map(excluded);
+    if (nextPicks.has(g.id)) nextPicks.delete(g.id);
+    else if (!nextExcluded.has(g.id)) nextExcluded.set(g.id, g.name);
     else {
-      const used = new Set([...next.values()].map((p) => p.slot));
+      nextExcluded.delete(g.id);
+      const used = new Set([...nextPicks.values()].map((p) => p.slot));
       const slot = SERIES.findIndex((_, i) => !used.has(i));
-      if (slot < 0) return;
-      next.set(g.id, { slot, name: g.name });
+      if (slot >= 0) nextPicks.set(g.id, { slot, name: g.name });
     }
-    setCustom({ groupBy, picks: next });
+    setCustom({ groupBy, picks: nextPicks, excluded: nextExcluded });
   };
   return {
     picks,
+    excluded,
+    /** `groups` without the excluded ones. */
+    included,
     showOther,
     toggle,
     toggleOther: () => setShowOther((v) => !v),
@@ -393,13 +406,14 @@ export function BreakdownsTab({ fileId, range }: { fileId: string; range: DateRa
   const r = useReport<TimeseriesData>(fileId, 'timeseries', { from: range.from, to: range.to, granularity, groupBy });
 
   const groups = useMemo(() => (r.data ? groupTotals(r.data.data, metric) : []), [r.data, metric]);
-  const { picks, showOther, toggle, toggleOther, reset } = usePicks(groups, groupBy);
+  const { picks, excluded, included, showOther, toggle, toggleOther, reset } = usePicks(groups, groupBy);
+  const kept = useMemo(() => (r.data ? without(r.data.data, excluded) : null), [r.data, excluded]);
 
   const view = useMemo(() => {
-    if (!r.data) return null;
-    const v = shape(r.data.data, metric, groups, picks, showOther);
+    if (!kept) return null;
+    const v = shape(kept, metric, included, picks, showOther);
     return { ...v, rows: withAverage(v) };
-  }, [r.data, metric, groups, picks, showOther]);
+  }, [kept, metric, included, picks, showOther]);
 
   return (
     <>
@@ -417,20 +431,21 @@ export function BreakdownsTab({ fileId, range }: { fileId: string; range: DateRa
         <PrintButton
           tab="Breakdowns"
           title={view?.title ?? 'Breakdowns'}
-          meta={[rangeText(range), `Per ${granularity.toLowerCase()}`, groupBy === 'none' ? '' : `Split by ${groupBy} (${metric})`]}
+          meta={[rangeText(range), `Per ${granularity.toLowerCase()}`, groupBy === 'none' ? '' : `Split by ${groupBy} (${metric})`, excludingText(excluded)]}
         />
       </div>
       {r.error && <ErrorBox error={r.error} />}
       {!r.data && !r.error && <p className="muted">Loading…</p>}
-      {r.data && view && (
+      {r.data && kept && view && (
         <>
           <Unconverted list={r.data.data.unconverted} />
-          <BreakdownKpis data={r.data.data} base={r.data.baseCurrency} metric={metric} unit={granularity.toLowerCase()} />
+          <BreakdownKpis data={kept} base={r.data.baseCurrency} metric={metric} unit={granularity.toLowerCase()} excluded={excluded} />
           <FlowChart view={view} base={r.data.baseCurrency} label={`${view.title} per ${granularity.toLowerCase()}`} />
           {view.stacked && (
             <PickLegend
               groups={groups}
               picks={picks}
+              excluded={excluded}
               base={r.data.baseCurrency}
               showOther={showOther}
               onToggleOther={toggleOther}
@@ -577,6 +592,21 @@ export function groupTotals(d: TimeseriesData, metric: Metric): Group[] {
   return [...totals.values()].filter((g) => g.total > 0).sort((a, b) => b.total - a.total);
 }
 
+/** The data without the excluded groups' points, so the chart and KPIs alike behave as if they never moved money. */
+export function without(d: TimeseriesData, excluded: Excluded): TimeseriesData {
+  return excluded.size ? { ...d, points: d.points.filter((p) => !excluded.has(p.groupId ?? '?')) } : d;
+}
+
+/** "Excluding Rent, Travel": the print header line, empty when nothing is excluded. */
+export const excludingText = (excluded: Excluded) => (excluded.size ? `Excluding ${[...excluded.values()].join(', ')}` : '');
+
+/** The same for a KPI note, which only has room for a few names. */
+export function excludingNote(excluded: Excluded): string | undefined {
+  const names = [...excluded.values()];
+  if (!names.length) return undefined;
+  return `excluding ${names.length > 3 ? `${names.slice(0, 2).join(', ')} and ${names.length - 2} more` : names.join(', ')}`;
+}
+
 /**
  * Pivot API points into chart rows. Grouped views show the picked groups and fold the rest into "Other".
  * Given `buckets`, a grouped view has a row for each of them, in that order, even an empty one; otherwise
@@ -639,25 +669,39 @@ function rowTotal(row: Record<string, string | number> | undefined, view: View):
   return row ? view.series.reduce((sum, s) => sum + Number(row[s.key] ?? 0), 0) : 0;
 }
 
-/** Checkbox legend for grouped views: checked groups get their own color, unchecked ones fold into "Other" (itself optional). */
-export function PickLegend({ groups, picks, base, showOther, onToggleOther, onToggle, onReset }: {
+/** What a click on a legend box does next, per state. */
+const NEXT = {
+  picked: 'Click to fold it into Other.',
+  folded: 'Click to exclude it from the chart and figures.',
+  excluded: 'Excluded from the chart and figures. Click to show it again.',
+};
+
+/**
+ * Checkbox legend for grouped views. Each box cycles through three states: checked groups get their own color,
+ * unchecked ones fold into "Other" (itself optional), and crossed-out ones are excluded altogether.
+ */
+export function PickLegend({ groups, picks, excluded, base, showOther, onToggleOther, onToggle, onReset }: {
   groups: Group[];
   picks: Picks;
+  excluded: Excluded;
   base: string;
   showOther: boolean;
   onToggleOther: () => void;
   onToggle: (g: Group) => void;
   onReset: () => void;
 }) {
-  // Picks survive range changes, so a picked group may have nothing in this range; keep it listed
-  // (at zero) so it can still be unchecked and its color slot freed.
+  // Picks and exclusions survive range changes, so such a group may have nothing in this range; keep it listed
+  // (at zero) so it can still be cycled on, freeing its color slot or bringing it back.
   const active = new Set(groups.map((g) => g.id));
-  const idle = [...picks].filter(([id]) => !active.has(id)).map(([id, p]) => ({ id, name: p.name, total: 0 }));
+  const idle = [...[...picks].map(([id, p]) => [id, p.name] as const), ...excluded]
+    .filter(([id]) => !active.has(id))
+    .map(([id, name]) => ({ id, name, total: 0 }));
   const items = [...groups, ...idle];
   if (!items.length) return null;
   const full = picks.size >= SERIES.length;
-  const other = groups.filter((g) => !picks.has(g.id)).reduce((sum, g) => sum + g.total, 0);
-  const whole = groups.reduce((sum, g) => sum + g.total, 0);
+  const kept = groups.filter((g) => !excluded.has(g.id));
+  const other = kept.filter((g) => !picks.has(g.id)).reduce((sum, g) => sum + g.total, 0);
+  const whole = kept.reduce((sum, g) => sum + g.total, 0);
   return (
     <fieldset className="pick-legend">
       <legend>
@@ -667,19 +711,23 @@ export function PickLegend({ groups, picks, base, showOther, onToggleOther, onTo
       <ul>
         {items.map((g) => {
           const slot = picks.get(g.id)?.slot;
+          const out = excluded.has(g.id);
+          const state = slot !== undefined ? 'picked' : out ? 'excluded' : 'folded';
           return (
             <li key={g.id}>
-              <label>
+              <label className={out ? 'excluded' : undefined} title={`${g.name}. ${NEXT[state]}`}>
+                {/* A native checkbox has two states; the third is drawn over an unchecked one (see .excluded). */}
                 <input
                   type="checkbox"
                   checked={slot !== undefined}
-                  disabled={slot === undefined && full}
                   onChange={() => onToggle(g)}
+                  className={out ? 'excluded' : undefined}
+                  aria-label={out ? `${g.name} (excluded)` : undefined}
                   style={slot !== undefined ? { accentColor: SERIES[slot] } : undefined}
                 />
                 <span className="name">{g.name}</span>
                 <span className="num muted">{fmtMoney(g.total, base)}</span>
-                <span className="num pct">{fmtPct(g.total, whole)}</span>
+                <span className="num pct">{out ? '' : fmtPct(g.total, whole)}</span>
               </label>
             </li>
           );

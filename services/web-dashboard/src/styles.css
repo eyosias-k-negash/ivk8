@@ -58,6 +58,12 @@ button.link { background:none; border:0; color:var(--accent); cursor:pointer; pa
 .pick-legend input { margin:0; width:14px; height:14px; flex:none; }
 .pick-legend .name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pick-legend .pct { min-width:5ch; text-align:right; font-variant-numeric:tabular-nums; }
+/* Third state of a legend box: the group is excluded altogether. A hand-drawn box with a cross in it. */
+.pick-legend input.excluded { appearance:none; padding:2px; border:1px solid var(--muted); border-radius:3px; cursor:pointer;
+  background:linear-gradient(45deg, transparent 40%, var(--zone-over) 40% 60%, transparent 60%),
+    linear-gradient(-45deg, transparent 40%, var(--zone-over) 40% 60%, transparent 60%);
+  background-origin:content-box; background-clip:content-box; background-repeat:no-repeat; }
+.pick-legend label.excluded .name { color:var(--muted); text-decoration:line-through; }
 .pick-legend .swatch { width:14px; height:14px; flex:none; border-radius:3px; background:var(--viz-muted); }
 
 .pick-legend .swatch.solid { background:var(--c); }

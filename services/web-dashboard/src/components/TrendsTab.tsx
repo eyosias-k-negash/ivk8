@@ -4,7 +4,10 @@ import { useReport } from '../api/hooks';
 import { useParams } from '../state/params';
 import { PrintButton, rangeText } from '../print';
 import { ErrorBox } from './ErrorBox';
-import { FlowChart, FlowTable, Kpi, PickLegend, SplitControls, Unconverted, groupTotals, shape, usePicks, withAverage, type DateRange, type Metric } from './FlowReports';
+import {
+  FlowChart, FlowTable, Kpi, PickLegend, SplitControls, Unconverted, excludingNote, excludingText, groupTotals, shape, usePicks, withAverage, without,
+  type DateRange, type Metric,
+} from './FlowReports';
 import { fmtMoney } from '../format';
 import { PATTERNS, foldTrend, type Aggregate, type Pattern, type Trend } from '../trends';
 
@@ -29,20 +32,20 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
   const spec = PATTERNS[pattern];
   const r = useReport<TimeseriesData>(fileId, 'timeseries', { from: range.from, to: range.to, granularity: spec.granularity, groupBy });
 
-  // While another pattern loads, the previous answer is at the old granularity; folding it would mislabel months as days.
-  const trend = useMemo(
-    () => (r.data && r.data.data.granularity === spec.granularity ? foldTrend(r.data.data, pattern, tz, aggregate) : null),
-    [r.data, spec.granularity, pattern, tz, aggregate],
-  );
   // Legend figures are what each group moved over the range, whatever the bars aggregate.
   const groups = useMemo(() => (r.data ? groupTotals(r.data.data, metric) : []), [r.data, metric]);
-  const { picks, showOther, toggle, toggleOther, reset } = usePicks(groups, groupBy);
+  const { picks, excluded, included, showOther, toggle, toggleOther, reset } = usePicks(groups, groupBy);
+  // While another pattern loads, the previous answer is at the old granularity; folding it would mislabel months as days.
+  const trend = useMemo(
+    () => (r.data && r.data.data.granularity === spec.granularity ? foldTrend(without(r.data.data, excluded), pattern, tz, aggregate) : null),
+    [r.data, excluded, spec.granularity, pattern, tz, aggregate],
+  );
 
   const view = useMemo(() => {
     if (!trend) return null;
-    const v = shape(trend.data, metric, groups, picks, showOther, trend.slots);
+    const v = shape(trend.data, metric, included, picks, showOther, trend.slots);
     return { ...v, rows: withAverage(v) };
-  }, [trend, metric, groups, picks, showOther]);
+  }, [trend, metric, included, picks, showOther]);
 
   const unit = spec.unit;
   return (
@@ -68,7 +71,7 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
         <PrintButton
           tab="Trends"
           title={`${view?.title ?? 'Trends'}: ${spec.label.toLowerCase()}`}
-          meta={[rangeText(range), AGGREGATE_LABEL[aggregate], groupBy === 'none' ? '' : `Split by ${groupBy} (${metric})`]}
+          meta={[rangeText(range), AGGREGATE_LABEL[aggregate], groupBy === 'none' ? '' : `Split by ${groupBy} (${metric})`, excludingText(excluded)]}
         />
       </div>
       {r.error && <ErrorBox error={r.error} />}
@@ -76,12 +79,20 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
       {r.data && trend && view && (
         <>
           <Unconverted list={r.data.data.unconverted} />
-          <TrendKpis trend={trend} base={r.data.baseCurrency} metric={groupBy === 'none' ? null : metric} unit={unit} aggregate={aggregate} />
+          <TrendKpis
+            trend={trend}
+            base={r.data.baseCurrency}
+            metric={groupBy === 'none' ? null : metric}
+            unit={unit}
+            aggregate={aggregate}
+            note={excludingNote(excluded)}
+          />
           <FlowChart view={view} base={r.data.baseCurrency} label={`${view.title}, ${spec.label.toLowerCase()}`} />
           {view.stacked && (
             <PickLegend
               groups={groups}
               picks={picks}
+              excluded={excluded}
               base={r.data.baseCurrency}
               showOther={showOther}
               onToggleOther={toggleOther}
@@ -104,10 +115,17 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
 }
 
 /**
- * The extremes of the chart, all groups together (picks do not matter). With no split (`metric` null), the range's
- * income, expense and net, then the costliest slot.
+ * The extremes of the chart, all groups together but the excluded ones (picks do not matter; `note` names the
+ * excluded). With no split (`metric` null), the range's income, expense and net, then the costliest slot.
  */
-function TrendKpis({ trend, base, metric, unit, aggregate }: { trend: Trend; base: string; metric: Metric | null; unit: string; aggregate: Aggregate }) {
+function TrendKpis({ trend, base, metric, unit, aggregate, note }: {
+  trend: Trend;
+  base: string;
+  metric: Metric | null;
+  unit: string;
+  aggregate: Aggregate;
+  note?: string;
+}) {
   const perSlot = new Map(trend.slots.map((s) => [s, { income: 0, expense: 0 }]));
   for (const p of trend.data.points) {
     const b = perSlot.get(p.bucket);
@@ -137,7 +155,7 @@ function TrendKpis({ trend, base, metric, unit, aggregate }: { trend: Trend; bas
   const mean = n ? slots.reduce((s, [, b]) => s + b[metric], 0) / n : 0;
   return (
     <div className="kpis">
-      <Kpi label={`Total ${metric}`} value={fmtMoney(metric === 'expense' ? trend.expense : trend.income, base)} />
+      <Kpi label={`Total ${metric}`} value={fmtMoney(metric === 'expense' ? trend.expense : trend.income, base)} note={note} />
       {high && high.value > 0 && <Kpi label={`Highest ${unit}`} value={high.slot} note={money(high.value)} />}
       {low && n > 1 && <Kpi label={`Lowest ${unit}`} value={low.slot} note={money(low.value)} />}
       <Kpi label={`Average ${unit}`} value={fmtMoney(mean, base)} note={`mean of the ${n} bar${n === 1 ? '' : 's'}`} />
