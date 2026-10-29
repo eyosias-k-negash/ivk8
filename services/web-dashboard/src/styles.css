@@ -126,3 +126,5 @@ button.link { background:none; border:0; color:var(--accent); cursor:pointer; pa
 .saved-filters li button { border:0; background:none; color:inherit; font:inherit; cursor:pointer; padding:4px 10px; }
 .saved-filters li .saved-remove { padding:4px 8px 4px 2px; color:var(--muted); }
 .saved-new { display:flex; gap:6px; } .saved-new input { width:11em; }
+/* Hovering a legend row fades the other series' bars; ease it rather than flash. */
+@media (prefers-reduced-motion: no-preference) { .chart .recharts-bar-rectangle path { transition: fill-opacity .15s; } }

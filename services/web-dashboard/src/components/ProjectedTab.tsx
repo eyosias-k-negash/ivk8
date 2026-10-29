@@ -6,7 +6,7 @@ import { useReport } from '../api/hooks';
 import { useParams } from '../state/params';
 import { PrintButton, rangeText } from '../print';
 import { ErrorBox } from './ErrorBox';
-import { Kpi, RelativeRange, SERIES, Unconverted, type DateRange } from './FlowReports';
+import { Kpi, RelativeRange, SERIES, Unconverted, fade, highlighted, hoverList, hoverRow, type DateRange } from './FlowReports';
 import { fmtMoney, fmtPct, offsetMs } from '../format';
 
 const OTHER = '__other';
@@ -216,7 +216,7 @@ function FlowTooltip({ active, payload, income, expense, base, head }: {
 }
 
 /** Income stacked above zero and expenses below (right axis), with net worth in its own band on top (left axis). */
-function FlowChart({ view, base, label, head, lines, today }: {
+function FlowChart({ view, base, label, head, lines, today, hover }: {
   view: View;
   base: string;
   label: string;
@@ -224,9 +224,12 @@ function FlowChart({ view, base, label, head, lines, today }: {
   lines: ReactNode[];
   /** Bucket holding today; marks it and draws the dimmed average-carried-forward parts of the bars. */
   today?: string;
+  /** Series key of the hovered legend row. */
+  hover: string | null;
 }) {
   const layout = useMemo(() => chartLayout(view), [view]);
   const series = [...view.income, ...view.expense];
+  const lit = highlighted(series, hover);
   const bar = (s: Series, key: string, opacity = 1) => (
     <Bar
       key={key}
@@ -234,7 +237,7 @@ function FlowChart({ view, base, label, head, lines, today }: {
       dataKey={key}
       name={s.label}
       fill={s.color}
-      fillOpacity={opacity}
+      fillOpacity={opacity * fade(lit, s.key)}
       stackId={s.kind}
       stroke="var(--card)"
       strokeWidth={2}
@@ -387,6 +390,7 @@ function PlannedProjection({ fileId, range, granularity }: { fileId: string; ran
   const r = useReport<PlannedData>(fileId, 'planned', { from: range.from, to: range.to, granularity });
   const full = useMemo(() => (r.data ? shapePlanned(r.data.data) : null), [r.data]);
   const [shown, setShown] = useState<OtherShown>({ income: true, expense: true });
+  const [hover, setHover] = useState<string | null>(null);
   const view = useMemo(() => (full ? dropOther(full, shown) : null), [full, shown]);
 
   if (r.error) return <ErrorBox error={r.error} />;
@@ -418,6 +422,7 @@ function PlannedProjection({ fileId, range, granularity }: { fileId: string; ran
       <FlowChart
         view={view}
         base={base}
+        hover={hover}
         label={`Planned income and expenses per ${UNIT[granularity]} with projected net worth`}
         head={(row, net) => (
           <>
@@ -429,8 +434,8 @@ function PlannedProjection({ fileId, range, granularity }: { fileId: string; ran
           <Line key="nw" yAxisId="nw" dataKey={NET_WORTH} name="Projected net worth" type="natural" stroke="var(--fg)" strokeWidth={2} dot={{ r: 3, fill: 'var(--fg)' }} isAnimationActive={false} />,
         ]}
       />
-      <CategoryLegend title="Planned income" series={full.income} total={incomeTotal} base={base} otherShown={shown.income} onToggleOther={() => setShown((o) => ({ ...o, income: !o.income }))} />
-      <CategoryLegend title="Planned expenses" series={full.expense} total={expenseTotal} base={base} otherShown={shown.expense} onToggleOther={() => setShown((o) => ({ ...o, expense: !o.expense }))} />
+      <CategoryLegend title="Planned income" series={full.income} total={incomeTotal} base={base} otherShown={shown.income} onToggleOther={() => setShown((o) => ({ ...o, income: !o.income }))} onHover={setHover} />
+      <CategoryLegend title="Planned expenses" series={full.expense} total={expenseTotal} base={base} otherShown={shown.expense} onToggleOther={() => setShown((o) => ({ ...o, expense: !o.expense }))} onHover={setHover} />
       <FlowTable view={view} base={base} />
     </>
   );
@@ -445,6 +450,7 @@ function AverageProjection({ fileId, to, granularity, lookback }: { fileId: stri
   const r = useReport<ProjectionData>(fileId, 'projection', { to, granularity, window: String(lookback) });
   const full = useMemo(() => (r.data ? shapeAverage(r.data.data) : null), [r.data]);
   const [shown, setShown] = useState<OtherShown>({ income: true, expense: true });
+  const [hover, setHover] = useState<string | null>(null);
   const view = useMemo(() => (full ? dropOther(full, shown) : null), [full, shown]);
 
   if (r.error) return <ErrorBox error={r.error} />;
@@ -495,6 +501,7 @@ function AverageProjection({ fileId, to, granularity, lookback }: { fileId: stri
       <FlowChart
         view={view}
         base={base}
+        hover={hover}
         label={`Net worth projected from the average income and expense of the last ${plural(d.windowUsed, unit)}`}
         today={current?.bucket}
         head={(row, net) =>
@@ -527,14 +534,15 @@ function AverageProjection({ fileId, to, granularity, lookback }: { fileId: stri
           <Line key="actual" yAxisId="nw" dataKey={NW_ACTUAL} name="Net worth" type="natural" stroke="var(--fg)" strokeWidth={2} dot={{ r: 3, fill: 'var(--fg)' }} isAnimationActive={false} />,
         ]}
       />
-      <CategoryLegend title={`Average income per ${unit}`} series={full.income} total={incomeAvg} base={base} otherShown={shown.income} onToggleOther={() => setShown((o) => ({ ...o, income: !o.income }))} />
-      <CategoryLegend title={`Average expenses per ${unit}`} series={full.expense} total={expenseAvg} base={base} otherShown={shown.expense} onToggleOther={() => setShown((o) => ({ ...o, expense: !o.expense }))} />
+      <CategoryLegend title={`Average income per ${unit}`} series={full.income} total={incomeAvg} base={base} otherShown={shown.income} onToggleOther={() => setShown((o) => ({ ...o, income: !o.income }))} onHover={setHover} />
+      <CategoryLegend title={`Average expenses per ${unit}`} series={full.expense} total={expenseAvg} base={base} otherShown={shown.expense} onToggleOther={() => setShown((o) => ({ ...o, expense: !o.expense }))} onHover={setHover} />
       <FlowTable view={view} base={base} basis={(row) => basisOf(row, view)} />
     </>
   );
 }
 
-function CategoryLegend({ title, series, total, base, otherShown, onToggleOther }: {
+/** One side's categories. Hovering one that is in the chart highlights its part of the stacks. */
+function CategoryLegend({ title, series, total, base, otherShown, onToggleOther, onHover }: {
   title: string;
   series: Series[];
   /** Total of what the chart shows, i.e. without "Other" when it is unchecked. */
@@ -542,14 +550,15 @@ function CategoryLegend({ title, series, total, base, otherShown, onToggleOther 
   base: string;
   otherShown: boolean;
   onToggleOther: () => void;
+  onHover: (id: string | null) => void;
 }) {
   if (!series.length) return null;
   return (
     <fieldset className="pick-legend">
       <legend>{title} · {fmtMoney(total, base)}</legend>
-      <ul>
+      <ul {...hoverList(onHover)}>
         {series.map((s) => (
-          <li key={s.key}>
+          <li key={s.key} {...hoverRow(onHover, s.key)}>
             {isOther(s) ? (
               <label>
                 <input type="checkbox" checked={otherShown} onChange={onToggleOther} style={{ accentColor: s.color }} />

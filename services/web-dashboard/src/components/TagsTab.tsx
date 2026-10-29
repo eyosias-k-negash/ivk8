@@ -5,7 +5,9 @@ import type { Granularity, TagTotal, TagsData } from '@ivy/contracts';
 import { useReport } from '../api/hooks';
 import { PrintButton, rangeText } from '../print';
 import { ErrorBox } from './ErrorBox';
-import { AverageControl, Kpi, SERIES, Unconverted, averageText, periodsText, type DateRange } from './FlowReports';
+import {
+  AverageControl, Kpi, SERIES, Unconverted, averageText, fade, highlighted, hoverList, hoverRow, periodsText, type DateRange,
+} from './FlowReports';
 import { fmtMoney, fmtPct } from '../format';
 import type { AverageOver } from '../average';
 import { AVG_BUCKET, OTHER_COMBOS, comboSlots, isCombo, rowTotal, shapeTags, type Metric, type TagRow, type TagSeries, type TagView } from '../tags';
@@ -24,6 +26,7 @@ export function TagsTab({ fileId, range }: { fileId: string; range: DateRange })
   const [granularity, setGranularity] = useState<Granularity>('MONTH');
   const [metric, setMetric] = useState<Metric>('expense');
   const [over, setOver] = useState<AverageOver>('all');
+  const [hover, setHover] = useState<string | null>(null);
   const r = useReport<TagsData>(fileId, 'tags', { from: range.from, to: range.to, granularity });
 
   // Tags with money in the range for the shown metric, largest first.
@@ -118,7 +121,7 @@ export function TagsTab({ fileId, range }: { fileId: string; range: DateRange })
                 />
                 <Kpi label="Transactions" value={String(view.count)} />
               </div>
-              <TagChart view={view} series={series} base={r.data.baseCurrency} unit={unit} metric={metric} />
+              <TagChart view={view} series={series} base={r.data.baseCurrency} unit={unit} metric={metric} hover={hover} />
             </>
           )}
           <TagLegend
@@ -131,6 +134,7 @@ export function TagsTab({ fileId, range }: { fileId: string; range: DateRange })
             onToggle={toggle}
             onReset={() => setCustom(null)}
             onClear={() => setCustom(new Map())}
+            onHover={setHover}
           />
           <p className="muted" style={{ fontSize: 12 }}>
             Executed only; planned payments are not counted. A transaction carrying several of the checked tags counts once, in the
@@ -169,7 +173,16 @@ export function TagsTab({ fileId, range }: { fileId: string; range: DateRange })
   );
 }
 
-function TagChart({ view, series, base, unit, metric }: { view: TagView; series: Colored[]; base: string; unit: string; metric: Metric }) {
+function TagChart({ view, series, base, unit, metric, hover }: {
+  view: TagView;
+  series: Colored[];
+  base: string;
+  unit: string;
+  metric: Metric;
+  hover: string | null;
+}) {
+  // A hovered tag lights up its own segment and every combination carrying it: all of that tag's money.
+  const lit = highlighted(series, hover, (s, id) => s.key === id || s.tagIds.includes(id));
   return (
     <div className="chart" role="img" aria-label={`${metric === 'expense' ? 'Expense' : 'Income'} of the checked tags per ${unit}`}>
       <ResponsiveContainer>
@@ -192,7 +205,7 @@ function TagChart({ view, series, base, unit, metric }: { view: TagView; series:
             >
               {/* The trailing average bar is dimmed so it reads as a summary, not a period. */}
               {view.rows.map((row) => (
-                <Cell key={row.bucket} fillOpacity={row.bucket === AVG_BUCKET ? 0.55 : 1} />
+                <Cell key={row.bucket} fillOpacity={(row.bucket === AVG_BUCKET ? 0.55 : 1) * fade(lit, s.key)} />
               ))}
             </Bar>
           ))}
@@ -234,9 +247,10 @@ function TagTooltip({ active, payload, series, base, unit }: {
 /**
  * Checkbox legend: checked tags show their own part of the chart and its share; unchecked ones show their own total.
  * Unlike Breakdowns, unchecked tags are left out rather than folded into "Other": the chart is the checked collection.
- * Below them, each combination of checked tags that transactions carry together, as in the chart.
+ * Below them, each combination of checked tags that transactions carry together, as in the chart. Hovering a checked
+ * tag or a combination highlights its part of the stacks.
  */
-function TagLegend({ tags, metric, picks, view, series, base, onToggle, onReset, onClear }: {
+function TagLegend({ tags, metric, picks, view, series, base, onToggle, onReset, onClear, onHover }: {
   tags: TagTotal[];
   metric: Metric;
   picks: Picks;
@@ -246,6 +260,7 @@ function TagLegend({ tags, metric, picks, view, series, base, onToggle, onReset,
   onToggle: (t: { id: string; name: string }) => void;
   onReset: () => void;
   onClear: () => void;
+  onHover: (id: string | null) => void;
 }) {
   // Picks survive range changes, so a picked tag may have nothing in this range; keep it listed
   // (at zero) so it can still be unchecked and its color slot freed.
@@ -263,14 +278,14 @@ function TagLegend({ tags, metric, picks, view, series, base, onToggle, onReset,
         <button className="link" onClick={onClear}>Clear</button>
       </legend>
       {full && <p className="muted">All {SERIES.length} colors are in use. Uncheck one to add another.</p>}
-      <ul>
+      <ul {...hoverList(onHover)}>
         {items.map((t) => {
           const slot = picks.get(t.id)?.slot;
           const picked = slot !== undefined;
           const amount = picked ? (inChart.get(t.id) ?? 0) : t.total;
           const shared = view.shared.get(t.id);
           return (
-            <li key={t.id}>
+            <li key={t.id} {...hoverRow(onHover, t.id)}>
               <label
                 title={
                   picked && shared
@@ -296,9 +311,9 @@ function TagLegend({ tags, metric, picks, view, series, base, onToggle, onReset,
       {overlaps.length > 0 && (
         <>
           <p className="muted overlaps">Carrying several checked tags (each transaction counted once)</p>
-          <ul className="combos">
+          <ul className="combos" {...hoverList(onHover)}>
             {overlaps.map((s) => (
-              <li key={s.key}>
+              <li key={s.key} {...hoverRow(onHover, s.key)}>
                 <span className="pick-item" title={s.label}>
                   <span className="swatch solid" style={{ ['--c' as string]: s.color }} aria-hidden />
                   <span className="name">{s.label}</span>

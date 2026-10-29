@@ -5,7 +5,9 @@ import type { BudgetTimeseriesData, BudgetsData, Granularity } from '@ivy/contra
 import { useReport } from '../api/hooks';
 import { PrintButton, rangeText } from '../print';
 import { ErrorBox } from './ErrorBox';
-import { AverageControl, Kpi, SERIES, Unconverted, averageText, periodsText, type DateRange } from './FlowReports';
+import {
+  AverageControl, Kpi, SERIES, Unconverted, averageText, fade, highlighted, hoverList, hoverRow, periodsText, type DateRange,
+} from './FlowReports';
 import { fmtMoney, fmtPct } from '../format';
 import type { AverageOver } from '../average';
 
@@ -160,6 +162,7 @@ export function BudgetsTab({ fileId, range }: { fileId: string; range: DateRange
   );
   const [showOther, setShowOther] = useState(true);
   const [over, setOver] = useState<AverageOver>('all');
+  const [hover, setHover] = useState<string | null>(null);
   const view = useMemo(
     () => (r.data && r.data.data.budget.id === budgetId ? shape(r.data.data, showOther, over) : null),
     [r.data, budgetId, showOther, over],
@@ -176,6 +179,7 @@ export function BudgetsTab({ fileId, range }: { fileId: string; range: DateRange
   const allowed = periods.reduce((s, x) => s + x.threshold, 0);
   const unit = granularity.toLowerCase();
   const divisor = over === 'active' ? (view?.active ?? 0) : periods.length;
+  const lit = view ? highlighted(view.series, hover) : null;
 
   return (
     <>
@@ -252,7 +256,7 @@ export function BudgetsTab({ fileId, range }: { fileId: string; range: DateRange
                   >
                     {/* The trailing average bar is dimmed so it reads as a summary, not a period. */}
                     {view.rows.map((row) => (
-                      <Cell key={row.bucket} fillOpacity={row.bucket === AVG_BUCKET ? 0.55 : 1} />
+                      <Cell key={row.bucket} fillOpacity={(row.bucket === AVG_BUCKET ? 0.55 : 1) * fade(lit, s.key)} />
                     ))}
                   </Bar>
                 ))}
@@ -262,9 +266,9 @@ export function BudgetsTab({ fileId, range }: { fileId: string; range: DateRange
           </div>
           <fieldset className="pick-legend">
             <legend>Budget categories</legend>
-            <ul>
+            <ul {...hoverList(setHover)}>
               {view.series.filter((s) => s.key !== OTHER).map((s) => (
-                <li key={s.key}>
+                <li key={s.key} {...hoverRow(setHover, s.key)}>
                   <span className="pick-item">
                     <span className="swatch solid" style={{ ['--c' as string]: s.color }} aria-hidden />
                     <span className="name">{s.label}</span>
@@ -274,7 +278,7 @@ export function BudgetsTab({ fileId, range }: { fileId: string; range: DateRange
                 </li>
               ))}
               {view.other && (
-                <li>
+                <li {...hoverRow(setHover, OTHER)}>
                   <label>
                     <input type="checkbox" checked={showOther} onChange={() => setShowOther((v) => !v)} style={{ accentColor: 'var(--viz-muted)' }} />
                     <span className="name">{view.other.label}</span>

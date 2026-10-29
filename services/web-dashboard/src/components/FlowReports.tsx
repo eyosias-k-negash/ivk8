@@ -417,6 +417,7 @@ export function BreakdownsTab({ fileId, range }: { fileId: string; range: DateRa
   const [groupBy, setGroupBy] = useState<GroupBy>('none');
   const [metric, setMetric] = useState<Metric>('expense');
   const [over, setOver] = useState<AverageOver>('all');
+  const [hover, setHover] = useState<string | null>(null);
   const r = useReport<TimeseriesData>(fileId, 'timeseries', { from: range.from, to: range.to, granularity, groupBy });
 
   const groups = useMemo(() => (r.data ? groupTotals(r.data.data, metric) : []), [r.data, metric]);
@@ -462,7 +463,7 @@ export function BreakdownsTab({ fileId, range }: { fileId: string; range: DateRa
         <>
           <Unconverted list={r.data.data.unconverted} />
           <BreakdownKpis data={kept} base={r.data.baseCurrency} metric={metric} unit={unit} excluded={excluded} over={over} />
-          <FlowChart view={view} base={r.data.baseCurrency} label={`${view.title} per ${unit}`} />
+          <FlowChart view={view} base={r.data.baseCurrency} label={`${view.title} per ${unit}`} hover={hover} />
           {view.stacked && (
             <PickLegend
               groups={groups}
@@ -473,6 +474,7 @@ export function BreakdownsTab({ fileId, range }: { fileId: string; range: DateRa
               onToggleOther={toggleOther}
               onToggle={toggle}
               onReset={reset}
+              onHover={setHover}
             />
           )}
           <FlowTable view={view} base={r.data.baseCurrency} />
@@ -531,10 +533,40 @@ export const periodsText = (n: number, unit: string, over: AverageOver) => `${n}
 /** The print header line for the average, empty for the default. */
 export const averageText = (over: AverageOver, unit: string) => (over === 'active' ? `Average over non-empty ${unit}s` : '');
 
+/** Share of its opacity a bar keeps while a legend row other than its own is hovered. */
+const FADED = 0.2;
+
+type OnHover = (id: string | null) => void;
+
+/**
+ * Legend hover. A row reports its id when pointed at or focused, and its list clears it once both have left, so
+ * crossing the gap between two rows does not flicker. Every row reports; highlighted() decides what lights up.
+ */
+export const hoverRow = (onHover: OnHover, id: string) => ({ onMouseEnter: () => onHover(id), onFocus: () => onHover(id) });
+export const hoverList = (onHover: OnHover) => ({ onMouseLeave: () => onHover(null), onBlur: () => onHover(null) });
+
+/**
+ * Keys of the series the hovered legend row stands for (by default the one with its id as key), or null when no row
+ * is hovered or none of its series is in the chart: a folded row, or one just clicked out, fades nothing.
+ */
+export function highlighted<S extends { key: string }>(
+  series: readonly S[],
+  hover: string | null,
+  match: (s: S, id: string) => boolean = (s, id) => s.key === id,
+): ReadonlySet<string> | null {
+  if (hover === null) return null;
+  const keys = new Set(series.filter((s) => match(s, hover)).map((s) => s.key));
+  return keys.size ? keys : null;
+}
+
+/** Opacity factor for one series' bars: faded while the legend highlights others. */
+export const fade = (lit: ReadonlySet<string> | null, key: string) => (lit && !lit.has(key) ? FADED : 1);
+
 /** Bars per period from shape() + withAverage(): income vs expense side by side, or one stack per period for a split. */
-export function FlowChart({ view, base, label }: { view: View; base: string; label: string }) {
+export function FlowChart({ view, base, label, hover = null }: { view: View; base: string; label: string; hover?: string | null }) {
   // Card-colored seams between stacked segments; past ~60 bars each bar is a few pixels wide and the seams would hide it.
   const seams = view.stacked && view.rows.length <= 60;
+  const lit = highlighted(view.series, hover);
   return (
     <div className="chart" role="img" aria-label={label}>
       <ResponsiveContainer>
@@ -572,7 +604,7 @@ export function FlowChart({ view, base, label }: { view: View; base: string; lab
             >
               {/* The trailing average bar is dimmed so it reads as a summary, not a period. */}
               {view.rows.map((row) => (
-                <Cell key={row.bucket as string} fillOpacity={row.bucket === AVG_BUCKET ? 0.55 : 1} />
+                <Cell key={row.bucket as string} fillOpacity={(row.bucket === AVG_BUCKET ? 0.55 : 1) * fade(lit, s.key)} />
               ))}
             </Bar>
           ))}
@@ -721,9 +753,10 @@ const NEXT = {
 
 /**
  * Checkbox legend for grouped views. Each box cycles through three states: checked groups get their own color,
- * unchecked ones fold into "Other" (itself optional), and crossed-out ones are excluded altogether.
+ * unchecked ones fold into "Other" (itself optional), and crossed-out ones are excluded altogether. Hovering a
+ * checked row highlights its part of the stacks.
  */
-export function PickLegend({ groups, picks, excluded, base, showOther, onToggleOther, onToggle, onReset }: {
+export function PickLegend({ groups, picks, excluded, base, showOther, onToggleOther, onToggle, onReset, onHover }: {
   groups: Group[];
   picks: Picks;
   excluded: Excluded;
@@ -732,6 +765,7 @@ export function PickLegend({ groups, picks, excluded, base, showOther, onToggleO
   onToggleOther: () => void;
   onToggle: (g: Group) => void;
   onReset: () => void;
+  onHover: OnHover;
 }) {
   // Picks and exclusions survive range changes, so such a group may have nothing in this range; keep it listed
   // (at zero) so it can still be cycled on, freeing its color slot or bringing it back.
@@ -751,13 +785,13 @@ export function PickLegend({ groups, picks, excluded, base, showOther, onToggleO
         Shown in chart ({picks.size}/{SERIES.length}) <button className="link" onClick={onReset}>Reset</button>
       </legend>
       {full && <p className="muted">All {SERIES.length} colors are in use. Uncheck one to add another.</p>}
-      <ul>
+      <ul {...hoverList(onHover)}>
         {items.map((g) => {
           const slot = picks.get(g.id)?.slot;
           const out = excluded.has(g.id);
           const state = slot !== undefined ? 'picked' : out ? 'excluded' : 'folded';
           return (
-            <li key={g.id}>
+            <li key={g.id} {...hoverRow(onHover, g.id)}>
               <label className={out ? 'excluded' : undefined} title={`${g.name}. ${NEXT[state]}`}>
                 {/* A native checkbox has two states; the third is drawn over an unchecked one (see .excluded). */}
                 <input
@@ -776,7 +810,7 @@ export function PickLegend({ groups, picks, excluded, base, showOther, onToggleO
           );
         })}
         {other > 0 && (
-          <li>
+          <li {...hoverRow(onHover, '__other')}>
             <label>
               <input type="checkbox" checked={showOther} onChange={onToggleOther} style={{ accentColor: 'var(--viz-muted)' }} />
               <span className="name">Other</span>

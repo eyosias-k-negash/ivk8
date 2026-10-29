@@ -5,7 +5,9 @@ import { useReport } from '../api/hooks';
 import { CursorValue } from './CursorValue';
 import { PrintButton, rangeText } from '../print';
 import { ErrorBox } from './ErrorBox';
-import { AverageControl, Kpi, SERIES, Unconverted, averageText, periodsText, type DateRange } from './FlowReports';
+import {
+  AverageControl, Kpi, SERIES, Unconverted, averageText, fade, highlighted, hoverList, hoverRow, periodsText, type DateRange,
+} from './FlowReports';
 import { TransactionsTable } from './TransactionsTable';
 import { fmtMoney, fmtPct } from '../format';
 import { signature, toConfigPatch, useSavedFilters } from '../state/savedFilters';
@@ -96,6 +98,7 @@ export function ReportsTab({ fileId, range, config, onChange }: {
   );
   // Unchecking "Other" leaves the unpicked groups out of the chart instead of folding them into it.
   const [showOther, setShowOther] = useState(true);
+  const [hover, setHover] = useState<string | null>(null);
   const toggle = (g: CustomReportOption) => {
     const next = new Map(picks);
     if (next.has(g.id)) next.delete(g.id);
@@ -180,7 +183,7 @@ export function ReportsTab({ fileId, range, config, onChange }: {
             <p className="muted">No transactions match these filters in this range.</p>
           ) : (
             <>
-              <ReportChart view={view} series={series} base={base} unit={unit} showNet={config.showNet} />
+              <ReportChart view={view} series={series} base={base} unit={unit} showNet={config.showNet} hover={hover} />
               <ChartKey series={series} showNet={config.showNet} split={split !== 'none'} />
               {split !== 'none' && (
                 <GroupLegend
@@ -195,6 +198,7 @@ export function ReportsTab({ fileId, range, config, onChange }: {
                     setCustom(null);
                     setShowOther(true);
                   }}
+                  onHover={setHover}
                 />
               )}
               <ReportTable view={view} series={series} base={base} split={split !== 'none'} />
@@ -534,7 +538,16 @@ function MultiSelect({ label, summary, options, checked, onChange }: {
 
 // ---------- chart ----------
 
-function ReportChart({ view, series, base, unit, showNet }: { view: ReportView; series: Colored[]; base: string; unit: string; showNet: boolean }) {
+function ReportChart({ view, series, base, unit, showNet, hover }: {
+  view: ReportView;
+  series: Colored[];
+  base: string;
+  unit: string;
+  showNet: boolean;
+  hover: string | null;
+}) {
+  // A hovered group lights up on both sides of the zero line.
+  const lit = highlighted(series, hover, (s, id) => s.group === id);
   return (
     <div className="chart report-chart" role="img" aria-label={`Income above zero and expense below, per ${unit}${showNet ? ', with net' : ''}`}>
       <ResponsiveContainer>
@@ -563,7 +576,7 @@ function ReportChart({ view, series, base, unit, showNet }: { view: ReportView; 
                   <Rectangle
                     {...p}
                     // The trailing average bar is dimmed so it reads as a summary, not a period.
-                    fillOpacity={row.bucket === AVG_BUCKET ? 0.55 : 1}
+                    fillOpacity={(row.bucket === AVG_BUCKET ? 0.55 : 1) * fade(lit, s.key)}
                     // Rounds the data end, below zero too (recharts draws those from their tip).
                     radius={s.key === top || s.key === bottom ? [4, 4, 0, 0] : 0}
                   />
@@ -680,8 +693,9 @@ function ChartKey({ series, showNet, split }: { series: Colored[]; showNet: bool
 /**
  * Checkbox legend for a split report: checked groups get their own color on both sides, unchecked ones fold into
  * "Other", which can be unchecked to leave them out. Each row shows the group's money in and out under the current filters.
+ * Hovering a checked row highlights its part of the stacks.
  */
-function GroupLegend({ groups, picks, base, noun, showOther, onToggleOther, onToggle, onReset }: {
+function GroupLegend({ groups, picks, base, noun, showOther, onToggleOther, onToggle, onReset, onHover }: {
   groups: CustomReportGroup[];
   picks: Picks;
   base: string;
@@ -690,6 +704,7 @@ function GroupLegend({ groups, picks, base, noun, showOther, onToggleOther, onTo
   onToggleOther: () => void;
   onToggle: (g: CustomReportOption) => void;
   onReset: () => void;
+  onHover: (id: string | null) => void;
 }) {
   // Picks survive filter changes, so a picked group may have nothing now; keep it listed (at zero) so it can
   // still be unchecked and its color freed.
@@ -711,11 +726,11 @@ function GroupLegend({ groups, picks, base, noun, showOther, onToggleOther, onTo
         <button className="link" onClick={onReset}>Reset</button>
       </legend>
       {full && <p className="muted">All {SERIES.length} colors are in use. Uncheck one to add another.</p>}
-      <ul className="flows">
+      <ul className="flows" {...hoverList(onHover)}>
         {items.map((g) => {
           const slot = picks.get(g.id)?.slot;
           return (
-            <li key={g.id}>
+            <li key={g.id} {...hoverRow(onHover, g.id)}>
               <label title={g.name}>
                 <input
                   type="checkbox"
@@ -731,7 +746,7 @@ function GroupLegend({ groups, picks, base, noun, showOther, onToggleOther, onTo
           );
         })}
         {rest.length > 0 && (
-          <li>
+          <li {...hoverRow(onHover, OTHER)}>
             <label>
               <input type="checkbox" checked={showOther} onChange={onToggleOther} style={{ accentColor: FOLDED_COLOR }} />
               <span className="name">Other ({rest.length})</span>

@@ -31,6 +31,7 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
   const [groupBy, setGroupBy] = useState<GroupBy>('none');
   const [metric, setMetric] = useState<Metric>('expense');
   const [over, setOver] = useState<AverageOver>('all');
+  const [hover, setHover] = useState<string | null>(null);
   const spec = PATTERNS[pattern];
   const r = useReport<TimeseriesData>(fileId, 'timeseries', { from: range.from, to: range.to, granularity: spec.granularity, groupBy });
 
@@ -97,7 +98,7 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
             over={over}
             note={excludingNote(excluded)}
           />
-          <FlowChart view={view} base={r.data.baseCurrency} label={`${view.title}, ${spec.label.toLowerCase()}`} />
+          <FlowChart view={view} base={r.data.baseCurrency} label={`${view.title}, ${spec.label.toLowerCase()}`} hover={hover} />
           {view.stacked && (
             <PickLegend
               groups={groups}
@@ -108,6 +109,7 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
               onToggleOther={toggleOther}
               onToggle={toggle}
               onReset={reset}
+              onHover={setHover}
             />
           )}
           <p className="muted">
