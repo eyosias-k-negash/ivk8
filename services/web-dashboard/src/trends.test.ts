@@ -6,7 +6,8 @@ const day = (s: string) => new Date(`${s}T00:00:00Z`);
 
 /** Series over local dates [from, to] (inclusive, like the range picker), in the given offset. */
 function series(from: string, to: string, granularity: Granularity, points: TimeseriesPoint[], tzMs = 0, groupBy: TimeseriesData['groupBy'] = 'none'): TimeseriesData {
-  return { from: Date.parse(from) - tzMs, to: Date.parse(to) + 86_400_000 - tzMs, granularity, groupBy, points, unconverted: [] };
+  const buckets = [...new Set(points.map((p) => p.bucket))];
+  return { from: Date.parse(from) - tzMs, to: Date.parse(to) + 86_400_000 - tzMs, granularity, groupBy, buckets, points, unconverted: [] };
 }
 
 describe('isoWeek', () => {

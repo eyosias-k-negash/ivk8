@@ -5,8 +5,9 @@ import type { Granularity, TagTotal, TagsData } from '@ivy/contracts';
 import { useReport } from '../api/hooks';
 import { PrintButton, rangeText } from '../print';
 import { ErrorBox } from './ErrorBox';
-import { Kpi, SERIES, Unconverted, type DateRange } from './FlowReports';
+import { AverageControl, Kpi, SERIES, Unconverted, averageText, periodsText, type DateRange } from './FlowReports';
 import { fmtMoney, fmtPct } from '../format';
+import type { AverageOver } from '../average';
 import { AVG_BUCKET, OTHER_COMBOS, comboSlots, isCombo, rowTotal, shapeTags, type Metric, type TagRow, type TagSeries, type TagView } from '../tags';
 
 const DEFAULT_PICKS = 5; // as in Breakdowns: leaves a few colors free for the user's own picks
@@ -22,6 +23,7 @@ type Colored = TagSeries & { color: string };
 export function TagsTab({ fileId, range }: { fileId: string; range: DateRange }) {
   const [granularity, setGranularity] = useState<Granularity>('MONTH');
   const [metric, setMetric] = useState<Metric>('expense');
+  const [over, setOver] = useState<AverageOver>('all');
   const r = useReport<TagsData>(fileId, 'tags', { from: range.from, to: range.to, granularity });
 
   // Tags with money in the range for the shown metric, largest first.
@@ -54,8 +56,8 @@ export function TagsTab({ fileId, range }: { fileId: string; range: DateRange })
 
   // Combinations get the colors the picked tags leave free; any beyond that fold into one muted series.
   const view = useMemo(
-    () => (r.data ? shapeTags(r.data.data, metric, new Set(picks.keys()), SERIES.length - picks.size) : null),
-    [r.data, metric, picks],
+    () => (r.data ? shapeTags(r.data.data, metric, new Set(picks.keys()), SERIES.length - picks.size, over) : null),
+    [r.data, metric, picks, over],
   );
   const series = useMemo<Colored[]>(() => {
     if (!view) return [];
@@ -69,7 +71,7 @@ export function TagsTab({ fileId, range }: { fileId: string; range: DateRange })
   }, [view, picks]);
 
   const unit = granularity.toLowerCase();
-  const word = metric === 'expense' ? 'spending' : 'income';
+  const divisor = view ? (over === 'active' ? view.active : view.periods) : 0;
 
   return (
     <>
@@ -90,10 +92,11 @@ export function TagsTab({ fileId, range }: { fileId: string; range: DateRange })
             <option value="income">Income</option>
           </select>
         </label>
+        <AverageControl value={over} onChange={setOver} unit={unit} />
         <PrintButton
           tab="Tags"
           title={`Tags: ${metric === 'expense' ? 'expense' : 'income'}`}
-          meta={[rangeText(range), `Per ${granularity.toLowerCase()}`]}
+          meta={[rangeText(range), `Per ${unit}`, averageText(over, unit)]}
         />
       </div>
       {r.error && <ErrorBox error={r.error} />}
@@ -110,12 +113,8 @@ export function TagsTab({ fileId, range }: { fileId: string; range: DateRange })
                 <Kpi label={`Total ${metric}`} value={fmtMoney(view.total, r.data.baseCurrency)} />
                 <Kpi
                   label={`Average per ${unit}`}
-                  value={fmtMoney(view.periods ? view.total / view.periods : 0, r.data.baseCurrency)}
-                  note={
-                    view.active && view.active < view.periods
-                      ? `${fmtMoney(view.total / view.active, r.data.baseCurrency)} across the ${view.active} of ${view.periods} ${unit}s with ${word}`
-                      : undefined
-                  }
+                  value={fmtMoney(divisor ? view.total / divisor : 0, r.data.baseCurrency)}
+                  note={`over ${periodsText(divisor, unit, over)}`}
                 />
                 <Kpi label="Transactions" value={String(view.count)} />
               </div>

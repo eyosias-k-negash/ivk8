@@ -175,7 +175,7 @@ export function timeseriesReport(
     .map((p) => ({ ...p, income: round(p.income), expense: round(p.expense) }))
     .sort((a, b) => a.bucket.localeCompare(b.bucket) || (a.groupName ?? '').localeCompare(b.groupName ?? ''));
 
-  return { from, to, granularity, groupBy, points: sorted, unconverted: [...unconverted].sort() };
+  return { from, to, granularity, groupBy, buckets: keys, points: sorted, unconverted: [...unconverted].sort() };
 }
 
 const GRANULARITIES: Granularity[] = ['DAY', 'WEEK', 'MONTH', 'YEAR'];

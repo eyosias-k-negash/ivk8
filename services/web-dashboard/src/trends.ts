@@ -104,7 +104,7 @@ export interface Trend {
   slots: string[];
   /** How many times each of `slots` occurs in the range (whole or in part). */
   occurrences: number[];
-  /** The API data re-bucketed by slot label, as totals or averages. With groupBy=none every slot has a point. */
+  /** The API data re-bucketed by slot label, as totals or averages; `buckets` are the slots. With groupBy=none every slot has a point. */
   data: TimeseriesData;
   /** What actually moved over the range, whatever the aggregate. */
   income: number;
@@ -151,10 +151,11 @@ export function foldTrend(d: TimeseriesData, pattern: Pattern, tz: string, aggre
     .sort((a, b) => a.slot - b.slot || (a.groupName ?? '').localeCompare(b.groupName ?? ''))
     .map(({ slot, ...p }) => (aggregate === 'average' ? { ...p, income: p.income / counts[slot]!, expense: p.expense / counts[slot]! } : p));
 
+  const slots = present.map((i) => spec.slots[i]!);
   return {
-    slots: present.map((i) => spec.slots[i]!),
+    slots,
     occurrences: present.map((i) => counts[i]!),
-    data: { ...d, points: folded },
+    data: { ...d, buckets: slots, points: folded },
     income,
     expense,
   };

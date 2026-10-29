@@ -5,8 +5,9 @@ import type { BudgetTimeseriesData, BudgetsData, Granularity } from '@ivy/contra
 import { useReport } from '../api/hooks';
 import { PrintButton, rangeText } from '../print';
 import { ErrorBox } from './ErrorBox';
-import { Kpi, SERIES, Unconverted, type DateRange } from './FlowReports';
+import { AverageControl, Kpi, SERIES, Unconverted, averageText, periodsText, type DateRange } from './FlowReports';
 import { fmtMoney, fmtPct } from '../format';
+import type { AverageOver } from '../average';
 
 const AVG_BUCKET = 'Average';
 const OTHER = '__other';
@@ -21,8 +22,11 @@ interface Series {
 
 type Row = { bucket: string; threshold: number } & Record<string, string | number>;
 
-/** Chart rows (one per period, then the dimmed average) and the legend series, from the API buckets. */
-function shape(d: BudgetTimeseriesData, showOther: boolean): { series: Series[]; rows: Row[]; other: Series | null } {
+/**
+ * Chart rows (one per period, then the dimmed average) and the legend series, from the API buckets. `active` counts
+ * the periods with spending shown, which are all the average divides by when `over` is 'active'.
+ */
+function shape(d: BudgetTimeseriesData, showOther: boolean, over: AverageOver): { series: Series[]; rows: Row[]; other: Series | null; active: number } {
   const totals = new Map(d.budget.categories.map((c) => [c.id, 0]));
   for (const b of d.buckets) for (const [id, v] of Object.entries(b.spent)) totals.set(id, (totals.get(id) ?? 0) + v);
 
@@ -53,14 +57,17 @@ function shape(d: BudgetTimeseriesData, showOther: boolean): { series: Series[];
     return row;
   });
 
-  // Mean over the displayed periods (empty periods count as 0), like the Breakdowns tab.
-  const n = rows.length;
+  // Mean over the displayed periods (empty ones count as 0) or only the active ones, like the Breakdowns tab. The
+  // threshold averages over the same periods, so the average bar still compares like for like.
+  const active = rows.filter((r) => rowTotal(r, series) > 0);
+  const divided = over === 'active' ? active : rows;
+  const n = divided.length;
   if (n) {
-    const avg: Row = { bucket: AVG_BUCKET, threshold: rows.reduce((s, r) => s + r.threshold, 0) / n };
+    const avg: Row = { bucket: AVG_BUCKET, threshold: divided.reduce((s, r) => s + r.threshold, 0) / n };
     for (const s of series) avg[s.key] = rows.reduce((sum, r) => sum + Number(r[s.key] ?? 0), 0) / n;
     rows.push(avg);
   }
-  return { series, rows, other };
+  return { series, rows, other, active: active.length };
 }
 
 const rowTotal = (row: Row, series: Series[]) => series.reduce((s, x) => s + Number(row[x.key] ?? 0), 0);
@@ -152,7 +159,11 @@ export function BudgetsTab({ fileId, range }: { fileId: string; range: DateRange
     !!budgetId,
   );
   const [showOther, setShowOther] = useState(true);
-  const view = useMemo(() => (r.data && r.data.data.budget.id === budgetId ? shape(r.data.data, showOther) : null), [r.data, budgetId, showOther]);
+  const [over, setOver] = useState<AverageOver>('all');
+  const view = useMemo(
+    () => (r.data && r.data.data.budget.id === budgetId ? shape(r.data.data, showOther, over) : null),
+    [r.data, budgetId, showOther, over],
+  );
 
   if (list.error) return <ErrorBox error={list.error} />;
   if (!list.data) return <p className="muted">Loading…</p>;
@@ -163,6 +174,8 @@ export function BudgetsTab({ fileId, range }: { fileId: string; range: DateRange
   const ceiling = Math.max(0, ...(view?.rows ?? []).map((x) => Math.max(x.threshold, rowTotal(x, view!.series))));
   const grand = view ? view.series.reduce((s, x) => s + x.total, 0) : 0;
   const allowed = periods.reduce((s, x) => s + x.threshold, 0);
+  const unit = granularity.toLowerCase();
+  const divisor = over === 'active' ? (view?.active ?? 0) : periods.length;
 
   return (
     <>
@@ -184,10 +197,11 @@ export function BudgetsTab({ fileId, range }: { fileId: string; range: DateRange
             <option value="YEAR">Year</option>
           </select>
         </label>
+        <AverageControl value={over} onChange={setOver} unit={unit} />
         <PrintButton
           tab="Budgets"
           title={`Budget: ${budgets.find((b) => b.id === budgetId)?.name ?? ''}`}
-          meta={[rangeText(range), `Per ${granularity.toLowerCase()}`]}
+          meta={[rangeText(range), `Per ${unit}`, averageText(over, unit)]}
         />
       </div>
       {r.error && <ErrorBox error={r.error} />}
@@ -200,9 +214,9 @@ export function BudgetsTab({ fileId, range }: { fileId: string; range: DateRange
             <Kpi label="Allotted" value={fmtMoney(allowed, base)} />
             <Kpi label={grand > allowed ? 'Over by' : 'Left'} value={fmtMoney(Math.abs(allowed - grand), base)} />
             <Kpi
-              label={`Average per ${granularity.toLowerCase()}`}
-              value={fmtMoney(periods.length ? grand / periods.length : 0, base)}
-              note={`over ${periods.length} ${granularity.toLowerCase()}${periods.length === 1 ? '' : 's'}`}
+              label={`Average per ${unit}`}
+              value={fmtMoney(divisor ? grand / divisor : 0, base)}
+              note={`over ${periodsText(divisor, unit, over)}`}
             />
           </div>
           <p className="budget-sum">

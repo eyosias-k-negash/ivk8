@@ -175,6 +175,8 @@ export interface TimeseriesData {
   to: number;
   granularity: Granularity;
   groupBy: GroupBy;
+  /** Every bucket key in the range, in order, whatever the split (a split leaves empty buckets out of `points`). */
+  buckets: string[];
   /** Sorted by bucket, then groupName. With groupBy=none every bucket in the range is present (zeros included). */
   points: TimeseriesPoint[];
   unconverted: string[];

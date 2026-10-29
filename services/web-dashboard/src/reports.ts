@@ -1,4 +1,5 @@
 import type { CustomReportData, CustomReportRule, CustomReportRuleGroup, Granularity, GroupBy } from '@ivy/contracts';
+import type { AverageOver } from './average';
 
 export const AVG_BUCKET = 'Average';
 /** Group of the unpicked groups, folded together on each side. */
@@ -16,6 +17,7 @@ export interface ReportConfig {
   granularity: Granularity;
   groupBy: GroupBy;
   showNet: boolean;
+  average: AverageOver;
   /** null = every account (so the filter keeps up with the backup); otherwise only these. */
   accounts: string[] | null;
   /** null = every category; otherwise only these flow ids. */
@@ -151,6 +153,7 @@ export const DEFAULT_CONFIG: ReportConfig = {
   granularity: 'MONTH',
   groupBy: 'none',
   showNet: true,
+  average: 'all',
   accounts: null,
   categories: null,
   rules: emptyRules(),
@@ -162,6 +165,7 @@ export const clearFilters = (c: ReportConfig): ReportConfig => ({
   granularity: c.granularity,
   groupBy: c.groupBy,
   showNet: c.showNet,
+  average: c.average,
   rules: emptyRules(),
 });
 
@@ -222,9 +226,10 @@ const SIDES: Side[] = ['income', 'expense'];
 /**
  * Chart data. Unsplit, each side is one series. Split, each picked group gets a series on each side it has money
  * on, largest nearest the zero line, and the unpicked groups fold into one "Other" per side, outermost
- * (or are left out altogether when `showOther` is off).
+ * (or are left out altogether when `showOther` is off). The average row divides by every period, or with `over`
+ * 'active' only those with matching transactions.
  */
-export function shapeReport(d: CustomReportData, picked: ReadonlySet<string>, showOther = true): ReportView {
+export function shapeReport(d: CustomReportData, picked: ReadonlySet<string>, showOther = true, over: AverageOver = 'all'): ReportView {
   const series: ReportSeries[] = [];
   if (d.groupBy === 'none') {
     series.push({ key: keyOf('income', ALL), side: 'income', group: ALL, label: 'Income', total: d.income });
@@ -268,11 +273,12 @@ export function shapeReport(d: CustomReportData, picked: ReadonlySet<string>, sh
     return row;
   });
 
-  // Mean over the displayed periods (empty periods count as 0), like every other tab.
+  // Mean over the displayed periods (empty ones count as 0) or only the active ones, like every other tab.
   const periods = rows.length;
-  if (periods) {
-    const avg: ReportRow = { bucket: AVG_BUCKET, income: d.income / periods, expense: d.expense / periods, [NET_AVG]: d.net / periods };
-    for (const s of series) avg[s.key] = (sign(s.side) * s.total) / periods;
+  const n = over === 'active' ? active : periods;
+  if (n) {
+    const avg: ReportRow = { bucket: AVG_BUCKET, income: d.income / n, expense: d.expense / n, [NET_AVG]: d.net / n };
+    for (const s of series) avg[s.key] = (sign(s.side) * s.total) / n;
     rows.push(avg);
   }
   return { series, rows, periods, active };

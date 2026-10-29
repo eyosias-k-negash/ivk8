@@ -7,6 +7,7 @@ import { useParams } from '../state/params';
 import { PrintButton, rangeText } from '../print';
 import { ErrorBox } from './ErrorBox';
 import { fmtMoney, fmtPct, offsetMs } from '../format';
+import type { AverageOver } from '../average';
 
 // ---------- shared date range (flow 4: "for the selected backup and date range") ----------
 
@@ -214,13 +215,15 @@ export function SummaryTab({ fileId, range }: { fileId: string; range: DateRange
 /** Income vs expense per interval, with a trailing average bar. No breakdowns; see Breakdowns for those. */
 function IncomeExpenseChart({ fileId, range }: { fileId: string; range: DateRange }) {
   const [granularity, setGranularity] = useState<Granularity>('MONTH');
+  const [over, setOver] = useState<AverageOver>('all');
   const r = useReport<TimeseriesData>(fileId, 'timeseries', { from: range.from, to: range.to, granularity, groupBy: 'none' });
   const view = useMemo(() => {
     if (!r.data) return null;
     const v = shape(r.data.data, 'expense', [], new Map(), true);
-    return { ...v, rows: withAverage(v) };
-  }, [r.data]);
+    return { ...v, rows: withAverage(v, over) };
+  }, [r.data, over]);
   const base = r.data?.baseCurrency ?? '';
+  const unit = granularity.toLowerCase();
 
   return (
     <>
@@ -234,13 +237,14 @@ function IncomeExpenseChart({ fileId, range }: { fileId: string; range: DateRang
             <option value="YEAR">Year</option>
           </select>
         </label>
-        <PrintButton tab="Income & expense" title="Income and expense" meta={[rangeText(range), `Per ${granularity.toLowerCase()}`]} />
+        <AverageControl value={over} onChange={setOver} unit={unit} />
+        <PrintButton tab="Income & expense" title="Income and expense" meta={[rangeText(range), `Per ${unit}`, averageText(over, unit)]} />
       </div>
       {r.error && <ErrorBox error={r.error} />}
       {!r.data && !r.error && <p className="muted">Loading…</p>}
       {r.data && view && (
         <>
-          <div className="chart" role="img" aria-label={`Income and expense per ${granularity.toLowerCase()}`}>
+          <div className="chart" role="img" aria-label={`Income and expense per ${unit}`}>
             <ResponsiveContainer>
               <BarChart data={view.rows} barGap={2} barCategoryGap="20%">
                 <CartesianGrid vertical={false} stroke="var(--viz-grid)" />
@@ -302,21 +306,30 @@ export function Kpi({ label, value, note }: { label: string; value: string; note
 
 /**
  * Whole-range figures for the Breakdowns tab; independent of which groups are picked for the chart, but `data` comes
- * without the excluded ones (named under the total).
+ * without the excluded ones (named under the total). Averages divide like the average bar (`over`).
  */
-function BreakdownKpis({ data, base, metric, unit, excluded }: { data: TimeseriesData; base: string; metric: Metric; unit: string; excluded: Excluded }) {
-  const perBucket = new Map<string, { income: number; expense: number }>();
+function BreakdownKpis({ data, base, metric, unit, excluded, over }: {
+  data: TimeseriesData;
+  base: string;
+  metric: Metric;
+  unit: string;
+  excluded: Excluded;
+  over: AverageOver;
+}) {
+  const perBucket = new Map(data.buckets.map((k) => [k, { income: 0, expense: 0 }]));
   for (const p of data.points) {
     const b = perBucket.get(p.bucket) ?? { income: 0, expense: 0 };
     b.income += p.income;
     b.expense += p.expense;
     perBucket.set(p.bucket, b);
   }
-  const n = perBucket.size;
-  const income = [...perBucket.values()].reduce((s, b) => s + b.income, 0);
-  const expense = [...perBucket.values()].reduce((s, b) => s + b.expense, 0);
+  const all = [...perBucket.values()];
+  // Unsplit, a period is empty with neither income nor expense; split, with none of the shown side.
+  const n = over === 'active' ? all.filter((b) => (data.groupBy === 'none' ? b.income || b.expense : b[metric])).length : all.length;
+  const income = all.reduce((s, b) => s + b.income, 0);
+  const expense = all.reduce((s, b) => s + b.expense, 0);
   const avg = (v: number) => fmtMoney(n ? v / n : 0, base);
-  const periods = `${n} ${unit}${n === 1 ? '' : 's'}`;
+  const periods = periodsText(n, unit, over);
   if (data.groupBy === 'none') {
     return (
       <div className="kpis">
@@ -403,6 +416,7 @@ export function BreakdownsTab({ fileId, range }: { fileId: string; range: DateRa
   const [granularity, setGranularity] = useState<Granularity>('MONTH');
   const [groupBy, setGroupBy] = useState<GroupBy>('none');
   const [metric, setMetric] = useState<Metric>('expense');
+  const [over, setOver] = useState<AverageOver>('all');
   const r = useReport<TimeseriesData>(fileId, 'timeseries', { from: range.from, to: range.to, granularity, groupBy });
 
   const groups = useMemo(() => (r.data ? groupTotals(r.data.data, metric) : []), [r.data, metric]);
@@ -412,8 +426,9 @@ export function BreakdownsTab({ fileId, range }: { fileId: string; range: DateRa
   const view = useMemo(() => {
     if (!kept) return null;
     const v = shape(kept, metric, included, picks, showOther);
-    return { ...v, rows: withAverage(v) };
-  }, [kept, metric, included, picks, showOther]);
+    return { ...v, rows: withAverage(v, over) };
+  }, [kept, metric, included, picks, showOther, over]);
+  const unit = granularity.toLowerCase();
 
   return (
     <>
@@ -428,10 +443,17 @@ export function BreakdownsTab({ fileId, range }: { fileId: string; range: DateRa
           </select>
         </label>
         <SplitControls groupBy={groupBy} onGroupBy={setGroupBy} metric={metric} onMetric={setMetric} />
+        <AverageControl value={over} onChange={setOver} unit={unit} />
         <PrintButton
           tab="Breakdowns"
           title={view?.title ?? 'Breakdowns'}
-          meta={[rangeText(range), `Per ${granularity.toLowerCase()}`, groupBy === 'none' ? '' : `Split by ${groupBy} (${metric})`, excludingText(excluded)]}
+          meta={[
+            rangeText(range),
+            `Per ${unit}`,
+            groupBy === 'none' ? '' : `Split by ${groupBy} (${metric})`,
+            excludingText(excluded),
+            averageText(over, unit),
+          ]}
         />
       </div>
       {r.error && <ErrorBox error={r.error} />}
@@ -439,8 +461,8 @@ export function BreakdownsTab({ fileId, range }: { fileId: string; range: DateRa
       {r.data && kept && view && (
         <>
           <Unconverted list={r.data.data.unconverted} />
-          <BreakdownKpis data={kept} base={r.data.baseCurrency} metric={metric} unit={granularity.toLowerCase()} excluded={excluded} />
-          <FlowChart view={view} base={r.data.baseCurrency} label={`${view.title} per ${granularity.toLowerCase()}`} />
+          <BreakdownKpis data={kept} base={r.data.baseCurrency} metric={metric} unit={unit} excluded={excluded} over={over} />
+          <FlowChart view={view} base={r.data.baseCurrency} label={`${view.title} per ${unit}`} />
           {view.stacked && (
             <PickLegend
               groups={groups}
@@ -489,6 +511,25 @@ export function SplitControls({ groupBy, onGroupBy, metric, onMetric }: {
     </>
   );
 }
+
+/** What the trailing average bar divides by. `unit` names one period: "month". */
+export function AverageControl({ value, onChange, unit }: { value: AverageOver; onChange: (v: AverageOver) => void; unit: string }) {
+  return (
+    <label>
+      Average over{' '}
+      <select value={value} onChange={(e) => onChange(e.target.value as AverageOver)}>
+        <option value="all">{`All ${unit}s`}</option>
+        <option value="active">{`Non-empty ${unit}s`}</option>
+      </select>
+    </label>
+  );
+}
+
+/** "12 months", or "7 non-empty months" when the average leaves the empty ones out. */
+export const periodsText = (n: number, unit: string, over: AverageOver) => `${n} ${over === 'active' ? 'non-empty ' : ''}${unit}${n === 1 ? '' : 's'}`;
+
+/** The print header line for the average, empty for the default. */
+export const averageText = (over: AverageOver, unit: string) => (over === 'active' ? `Average over non-empty ${unit}s` : '');
 
 /** Bars per period from shape() + withAverage(): income vs expense side by side, or one stack per period for a split. */
 export function FlowChart({ view, base, label }: { view: View; base: string; label: string }) {
@@ -609,10 +650,9 @@ export function excludingNote(excluded: Excluded): string | undefined {
 
 /**
  * Pivot API points into chart rows. Grouped views show the picked groups and fold the rest into "Other".
- * Given `buckets`, a grouped view has a row for each of them, in that order, even an empty one; otherwise
- * only buckets with money get a row, sorted by key.
+ * Every one of `d.buckets` gets a row, in that order, even an empty one.
  */
-export function shape(d: TimeseriesData, metric: Metric, groups: Group[], picks: Picks, showOther: boolean, buckets?: string[]): View {
+export function shape(d: TimeseriesData, metric: Metric, groups: Group[], picks: Picks, showOther: boolean): View {
   if (d.groupBy === 'none') {
     return {
       title: 'Income and expense',
@@ -625,7 +665,7 @@ export function shape(d: TimeseriesData, metric: Metric, groups: Group[], picks:
     };
   }
 
-  const rowsByBucket = new Map<string, Record<string, string | number>>((buckets ?? []).map((b) => [b, { bucket: b }]));
+  const rowsByBucket = new Map<string, Record<string, string | number>>(d.buckets.map((b) => [b, { bucket: b }]));
   for (const p of d.points) {
     const row = rowsByBucket.get(p.bucket) ?? { bucket: p.bucket };
     const id = p.groupId ?? '?';
@@ -645,15 +685,18 @@ export function shape(d: TimeseriesData, metric: Metric, groups: Group[], picks:
     title: metric === 'expense' ? 'Expense' : 'Income',
     stacked: true,
     series,
-    rows: buckets ? [...rowsByBucket.values()] : [...rowsByBucket.values()].sort((a, b) => String(a.bucket).localeCompare(String(b.bucket))),
+    rows: [...rowsByBucket.values()],
   };
 }
 
 const AVG_BUCKET = 'Average';
 
-/** Appends one row holding each shown series' mean over the displayed periods (empty periods count as 0). */
-export function withAverage(view: View): View['rows'] {
-  const n = view.rows.length;
+/**
+ * Appends one row holding each shown series' mean over the displayed periods: all of them (empty ones count as 0), or
+ * with `over` 'active' only those with money in a shown series. Nothing to divide by, no row.
+ */
+export function withAverage(view: View, over: AverageOver): View['rows'] {
+  const n = over === 'active' ? view.rows.filter((r) => view.series.some((s) => Number(r[s.key] ?? 0) !== 0)).length : view.rows.length;
   if (!n) return view.rows;
   // "Other" is not an enabled legend entry, so it gets no average bar.
   const avg: Record<string, string | number> = { bucket: AVG_BUCKET };

@@ -5,7 +5,7 @@ import { useReport } from '../api/hooks';
 import { CursorValue } from './CursorValue';
 import { PrintButton, rangeText } from '../print';
 import { ErrorBox } from './ErrorBox';
-import { Kpi, SERIES, Unconverted, type DateRange } from './FlowReports';
+import { AverageControl, Kpi, SERIES, Unconverted, averageText, periodsText, type DateRange } from './FlowReports';
 import { TransactionsTable } from './TransactionsTable';
 import { fmtMoney, fmtPct } from '../format';
 import { signature, toConfigPatch, useSavedFilters } from '../state/savedFilters';
@@ -108,7 +108,10 @@ export function ReportsTab({ fileId, range, config, onChange }: {
     setCustom({ groupBy: split, picks: next });
   };
 
-  const view = useMemo(() => (data ? shapeReport(data, new Set(picks.keys()), showOther) : null), [data, picks, showOther]);
+  const view = useMemo(
+    () => (data ? shapeReport(data, new Set(picks.keys()), showOther, config.average) : null),
+    [data, picks, showOther, config.average],
+  );
   const series = useMemo<Colored[]>(
     () =>
       (view?.series ?? []).map((s) => ({
@@ -118,6 +121,7 @@ export function ReportsTab({ fileId, range, config, onChange }: {
     [view, picks],
   );
   const unit = UNIT[config.granularity];
+  const divisor = view ? (config.average === 'active' ? view.active : view.periods) : 0;
 
   return (
     <>
@@ -142,10 +146,11 @@ export function ReportsTab({ fileId, range, config, onChange }: {
         <label>
           <input type="checkbox" checked={config.showNet} onChange={(e) => set({ showNet: e.target.checked })} /> Net line
         </label>
+        <AverageControl value={config.average} onChange={(average) => set({ average })} unit={unit} />
         <PrintButton
           tab="Reports"
           title="Custom report"
-          meta={[rangeText(range), `Per ${unit}`, split === 'none' ? '' : `Split by ${split}`]}
+          meta={[rangeText(range), `Per ${unit}`, split === 'none' ? '' : `Split by ${split}`, averageText(config.average, unit)]}
         />
       </div>
       <ReportFilters config={config} options={options.current} base={base} onChange={onChange} />
@@ -162,10 +167,10 @@ export function ReportsTab({ fileId, range, config, onChange }: {
             <Kpi label="Net" value={signed(data.net, base)} />
             <Kpi
               label={`Average net per ${unit}`}
-              value={signed(view.periods ? data.net / view.periods : 0, base)}
+              value={signed(divisor ? data.net / divisor : 0, base)}
               note={
-                view.periods
-                  ? `${fmtMoney(data.income / view.periods, base)} in, ${fmtMoney(data.expense / view.periods, base)} out over ${plural(view.periods, unit)}`
+                divisor
+                  ? `${fmtMoney(data.income / divisor, base)} in, ${fmtMoney(data.expense / divisor, base)} out over ${periodsText(divisor, unit, config.average)}`
                   : undefined
               }
             />

@@ -115,6 +115,13 @@ describe('timeseriesReport', () => {
     ]);
   });
 
+  it('lists every bucket even when a split leaves empty ones without points', () => {
+    const t = timeseriesReport(ds, r.from, r.to, 'WEEK', 'category', '+03:00', rates);
+    const none = timeseriesReport(ds, r.from, r.to, 'WEEK', 'none', '+03:00', rates);
+    expect(t.buckets).toEqual(none.points.map((p) => p.bucket));
+    expect(new Set(t.points.map((p) => p.bucket)).size).toBeLessThan(t.buckets.length);
+  });
+
   it('splits by account', () => {
     const t = timeseriesReport(ds, r.from, r.to, 'YEAR', 'account', '+03:00', rates);
     expect(t.points.find((p) => p.groupName === 'USD Wallet')).toMatchObject({ bucket: '2026', expense: 300 });

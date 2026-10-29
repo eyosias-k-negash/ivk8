@@ -182,6 +182,18 @@ describe('shapeReport', () => {
     expect([v.periods, v.active]).toEqual([3, 2]);
   });
 
+  it('can average over the periods with transactions only', () => {
+    const v = shapeReport(unsplit, new Set(), true, 'active');
+    expect(v.rows[3]).toEqual({
+      bucket: AVG_BUCKET,
+      income: 575,
+      expense: 510,
+      [NET_AVG]: 65,
+      [`income:${ALL}`]: 575,
+      [`expense:${ALL}`]: -510,
+    });
+  });
+
   it('split: picked groups on each side they have money on, largest nearest zero, the rest folded into Other', () => {
     const v = shapeReport(split, new Set(['food', 'fun']));
     expect(v.series.map((s) => [s.key, s.label, s.total])).toEqual([

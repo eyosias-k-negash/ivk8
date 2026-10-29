@@ -5,10 +5,11 @@ import { useParams } from '../state/params';
 import { PrintButton, rangeText } from '../print';
 import { ErrorBox } from './ErrorBox';
 import {
-  FlowChart, FlowTable, Kpi, PickLegend, SplitControls, Unconverted, excludingNote, excludingText, groupTotals, shape, usePicks, withAverage, without,
-  type DateRange, type Metric,
+  AverageControl, FlowChart, FlowTable, Kpi, PickLegend, SplitControls, Unconverted, averageText, excludingNote, excludingText, groupTotals, shape,
+  usePicks, withAverage, without, type DateRange, type Metric,
 } from './FlowReports';
 import { fmtMoney } from '../format';
+import type { AverageOver } from '../average';
 import { PATTERNS, foldTrend, type Aggregate, type Pattern, type Trend } from '../trends';
 
 /** What one bar is, in words, per pattern. */
@@ -29,6 +30,7 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
   const [aggregate, setAggregate] = useState<Aggregate>('total');
   const [groupBy, setGroupBy] = useState<GroupBy>('none');
   const [metric, setMetric] = useState<Metric>('expense');
+  const [over, setOver] = useState<AverageOver>('all');
   const spec = PATTERNS[pattern];
   const r = useReport<TimeseriesData>(fileId, 'timeseries', { from: range.from, to: range.to, granularity: spec.granularity, groupBy });
 
@@ -43,9 +45,9 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
 
   const view = useMemo(() => {
     if (!trend) return null;
-    const v = shape(trend.data, metric, included, picks, showOther, trend.slots);
-    return { ...v, rows: withAverage(v) };
-  }, [trend, metric, included, picks, showOther]);
+    const v = shape(trend.data, metric, included, picks, showOther);
+    return { ...v, rows: withAverage(v, over) };
+  }, [trend, metric, included, picks, showOther, over]);
 
   const unit = spec.unit;
   return (
@@ -68,10 +70,17 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
           </select>
         </label>
         <SplitControls groupBy={groupBy} onGroupBy={setGroupBy} metric={metric} onMetric={setMetric} />
+        <AverageControl value={over} onChange={setOver} unit={unit} />
         <PrintButton
           tab="Trends"
           title={`${view?.title ?? 'Trends'}: ${spec.label.toLowerCase()}`}
-          meta={[rangeText(range), AGGREGATE_LABEL[aggregate], groupBy === 'none' ? '' : `Split by ${groupBy} (${metric})`, excludingText(excluded)]}
+          meta={[
+            rangeText(range),
+            AGGREGATE_LABEL[aggregate],
+            groupBy === 'none' ? '' : `Split by ${groupBy} (${metric})`,
+            excludingText(excluded),
+            averageText(over, unit),
+          ]}
         />
       </div>
       {r.error && <ErrorBox error={r.error} />}
@@ -85,6 +94,7 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
             metric={groupBy === 'none' ? null : metric}
             unit={unit}
             aggregate={aggregate}
+            over={over}
             note={excludingNote(excluded)}
           />
           <FlowChart view={view} base={r.data.baseCurrency} label={`${view.title}, ${spec.label.toLowerCase()}`} />
@@ -116,14 +126,16 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
 
 /**
  * The extremes of the chart, all groups together but the excluded ones (picks do not matter; `note` names the
- * excluded). With no split (`metric` null), the range's income, expense and net, then the costliest slot.
+ * excluded). With no split (`metric` null), the range's income, expense and net, then the costliest slot. The average
+ * divides like the average bar (`over`).
  */
-function TrendKpis({ trend, base, metric, unit, aggregate, note }: {
+function TrendKpis({ trend, base, metric, unit, aggregate, over, note }: {
   trend: Trend;
   base: string;
   metric: Metric | null;
   unit: string;
   aggregate: Aggregate;
+  over: AverageOver;
   note?: string;
 }) {
   const perSlot = new Map(trend.slots.map((s) => [s, { income: 0, expense: 0 }]));
@@ -152,13 +164,18 @@ function TrendKpis({ trend, base, metric, unit, aggregate, note }: {
   }
   const high = pick(metric, (a, b) => a > b);
   const low = pick(metric, (a, b) => a < b);
-  const mean = n ? slots.reduce((s, [, b]) => s + b[metric], 0) / n : 0;
+  const counted = over === 'active' ? slots.filter(([, b]) => b[metric]).length : n;
+  const mean = counted ? slots.reduce((s, [, b]) => s + b[metric], 0) / counted : 0;
   return (
     <div className="kpis">
       <Kpi label={`Total ${metric}`} value={fmtMoney(metric === 'expense' ? trend.expense : trend.income, base)} note={note} />
       {high && high.value > 0 && <Kpi label={`Highest ${unit}`} value={high.slot} note={money(high.value)} />}
       {low && n > 1 && <Kpi label={`Lowest ${unit}`} value={low.slot} note={money(low.value)} />}
-      <Kpi label={`Average ${unit}`} value={fmtMoney(mean, base)} note={`mean of the ${n} bar${n === 1 ? '' : 's'}`} />
+      <Kpi
+        label={`Average ${unit}`}
+        value={fmtMoney(mean, base)}
+        note={`mean of the ${counted} ${over === 'active' ? 'non-empty ' : ''}bar${counted === 1 ? '' : 's'}`}
+      />
     </div>
   );
 }

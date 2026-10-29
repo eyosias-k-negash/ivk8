@@ -86,6 +86,12 @@ describe('shapeTags', () => {
     expect(v.rows.at(-1)).toEqual({ bucket: AVG_BUCKET, car: 50 });
   });
 
+  it('can average over the active periods only', () => {
+    const v = shapeTags(data, 'expense', new Set(['car']), Infinity, 'active');
+    expect(v.rows.at(-1)).toEqual({ bucket: AVG_BUCKET, car: 100 });
+    expect(shapeTags(data, 'income', new Set(['work']), Infinity, 'active').rows.map((r) => r.bucket)).toEqual(['2026-09', '2026-10']);
+  });
+
   it('reads the chosen metric', () => {
     const v = shapeTags(data, 'income', new Set(['trip', 'work']));
     expect(v.total).toBe(40);

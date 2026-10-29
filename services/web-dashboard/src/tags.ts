@@ -1,4 +1,5 @@
 import type { TagsData } from '@ivy/contracts';
+import type { AverageOver } from './average';
 
 export const AVG_BUCKET = 'Average';
 /** Series key prefix for transactions carrying two or more of the picked tags; their sorted ids follow. */
@@ -43,8 +44,9 @@ export interface TagView {
  * Chart data for the picked tags. A transaction carrying exactly one picked tag stacks under that tag; one carrying
  * several stacks once, under the combination of picked tags it carries, so every bar adds up to the money the picked
  * tags actually moved and the overlaps stay visible. Past `maxCombos`, the smallest combinations fold into one series.
+ * The average row divides by every period, or with `over` 'active' only those with picked money.
  */
-export function shapeTags(d: TagsData, metric: Metric, picked: ReadonlySet<string>, maxCombos = Infinity): TagView {
+export function shapeTags(d: TagsData, metric: Metric, picked: ReadonlySet<string>, maxCombos = Infinity, over: AverageOver = 'all'): TagView {
   const rank = new Map(d.tags.map((t, i) => [t.id, i]));
   const names = new Map(d.tags.map((t) => [t.id, t.name]));
   const totals = new Map<string, TagSeries>();
@@ -93,11 +95,12 @@ export function shapeTags(d: TagsData, metric: Metric, picked: ReadonlySet<strin
     return row;
   });
 
-  // Mean over the displayed periods (empty periods count as 0), like the Breakdowns tab.
+  // Mean over the displayed periods (empty ones count as 0) or only the active ones, like the Breakdowns tab.
   const periods = rows.length;
-  if (periods) {
+  const n = over === 'active' ? active : periods;
+  if (n) {
     const avg: TagRow = { bucket: AVG_BUCKET };
-    for (const s of series) avg[s.key] = s.total / periods;
+    for (const s of series) avg[s.key] = s.total / n;
     rows.push(avg);
   }
 
