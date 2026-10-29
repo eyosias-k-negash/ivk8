@@ -1,8 +1,37 @@
-# Ivy Wallet Plus
+# Ivyk8
 
-A personal finance dashboard for [Ivy Wallet](https://github.com/Ivy-Apps/ivy-wallet) users. Sign in with Google, point it at the Drive folder that holds your Ivy backups, and browse transactions, balances, reports and insights. Access to Drive is **read-only**, and nothing about you is stored.
+**A personal finance dashboard, built and run the way a production service would be: on a real multi-node Kubernetes cluster, behind a pipeline that tests, scans and signs everything it ships.**
 
-It is also a DevOps portfolio project. It runs as three stateless services on Kubernetes and ships through a pipeline that tests it, scans it, deploys it to a throwaway cluster and signs the images.
+Ivyk8 (Ivy + k8s) reads the backups that [Ivy Wallet+](https://github.com/eyosias-k-negash/ivy-wallet-plus), my fork of the Android money manager [Ivy Wallet](https://github.com/Ivy-Apps/ivy-wallet), writes to Google Drive, and turns years of transactions into a desktop dashboard. Access to Drive is **read-only**, and nothing about you is stored.
+
+### What this project shows
+
+| | |
+|---|---|
+| **Scoping** | The first design (Postgres, Redis, Istio, Argo…) was cut to three stateless services after a hard self-critique. The decisions are written down in [ADRs](docs/adr). |
+| **Kubernetes** | Runs on a three-node kubeadm cluster at home (Arch control plane, Raspberry Pi arm64 worker, WSL2 worker) with Calico, plus k3d for local and CI. PSA-restricted namespace, NetworkPolicies, kustomize overlays. |
+| **Delivery** | CI: types and tests → dependency, secret and manifest scans → image scan → deploy to an ephemeral k3d cluster → smoke tests. Release: GHCR, SBOM, provenance, cosign signatures. |
+| **Security** | Read-only Drive scope, PKCE OAuth, encrypted-cookie sessions, no database to leak. |
+| **Debugging** | Real outages on real hardware, written up as they happened. |
+
+### Read the build log
+
+The project is documented as a serialized blog, one chapter per feature or fix, failures included.
+
+1. [From a phone app to a cluster](https://eyosias.me/2026/10/23/from-a-phone-app-to-a-cluster.html): scoping an 18-month blueprint down to three services
+2. [Three services and nothing to store](https://eyosias.me/2026/10/25/system.html): the architecture and a security model made of subtraction
+
+More chapters follow as the work lands.
+
+*Live demo: coming soon.*
+
+---
+
+## Overview
+
+Sign in with Google, point it at the Drive folder that holds your Ivy backups, and browse transactions, balances, reports and insights.
+
+It runs as three stateless services on Kubernetes and ships through a pipeline that tests it, scans it, deploys it to a throwaway cluster and signs the images.
 
 ```
 Browser ─► Ingress ─┬─ /     ─► web-dashboard       (React + Vite, nginx)
