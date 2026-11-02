@@ -82,3 +82,13 @@ export function parseRange(
   if (from >= to) throw new BadRequest('from must be before to');
   return { from, to };
 }
+
+/**
+ * `includeTransfers` (summary, timeseries, tags, custom-report): whether transfers between two accounts included in
+ * the balance count (see `moneyFlows`). Off unless "true" or "1".
+ */
+export function parseIncludeTransfers(v: unknown): boolean {
+  if (v == null || v === '' || v === 'false' || v === '0') return false;
+  if (v === 'true' || v === '1') return true;
+  throw new BadRequest('includeTransfers must be true or false');
+}

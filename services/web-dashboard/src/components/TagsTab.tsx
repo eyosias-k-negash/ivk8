@@ -6,7 +6,8 @@ import { useReport } from '../api/hooks';
 import { PrintButton, rangeText } from '../print';
 import { ErrorBox } from './ErrorBox';
 import {
-  AverageControl, Kpi, SERIES, Unconverted, averageText, fade, highlighted, hoverList, hoverRow, periodsText, type DateRange,
+  AverageControl, Kpi, SERIES, Unconverted, averageText, betweenText, fade, highlighted, hoverList, hoverRow, periodsText, transfersParam,
+  transfersText, type DateRange,
 } from './FlowReports';
 import { fmtMoney, fmtPct } from '../format';
 import type { AverageOver } from '../average';
@@ -22,12 +23,12 @@ const FOLDED_COLOR = 'var(--viz-muted)';
 type Picks = Map<string, { slot: number; name: string }>;
 type Colored = TagSeries & { color: string };
 
-export function TagsTab({ fileId, range }: { fileId: string; range: DateRange }) {
+export function TagsTab({ fileId, range, transfers }: { fileId: string; range: DateRange; transfers: boolean }) {
   const [granularity, setGranularity] = useState<Granularity>('MONTH');
   const [metric, setMetric] = useState<Metric>('expense');
   const [over, setOver] = useState<AverageOver>('all');
   const [hover, setHover] = useState<string | null>(null);
-  const r = useReport<TagsData>(fileId, 'tags', { from: range.from, to: range.to, granularity });
+  const r = useReport<TagsData>(fileId, 'tags', { from: range.from, to: range.to, granularity, includeTransfers: transfersParam(transfers) });
 
   // Tags with money in the range for the shown metric, largest first.
   const ranked = useMemo(
@@ -99,7 +100,7 @@ export function TagsTab({ fileId, range }: { fileId: string; range: DateRange })
         <PrintButton
           tab="Tags"
           title={`Tags: ${metric === 'expense' ? 'expense' : 'income'}`}
-          meta={[rangeText(range), `Per ${unit}`, averageText(over, unit)]}
+          meta={[rangeText(range), `Per ${unit}`, transfersText(transfers), averageText(over, unit)]}
         />
       </div>
       {r.error && <ErrorBox error={r.error} />}
@@ -140,7 +141,7 @@ export function TagsTab({ fileId, range }: { fileId: string; range: DateRange })
             Executed only; planned payments are not counted. A transaction carrying several of the checked tags counts once, in the
             segment for that combination (such as “A + B”), so overlaps stay visible and each bar adds up to what the checked tags actually{' '}
             {metric === 'expense' ? 'cost' : 'brought in'}. Amounts beside unchecked tags are each tag’s own total. As in every tab, income and expense on accounts excluded from the balance are
-            left out, a transfer to or from one counts, and transfers between included accounts never count.
+            left out, a transfer to or from one counts, and {betweenText(transfers)}.
           </p>
           {picks.size > 0 && (
             <details>

@@ -6,7 +6,7 @@ import { PrintButton, rangeText } from '../print';
 import { ErrorBox } from './ErrorBox';
 import {
   AverageControl, FlowChart, FlowTable, Kpi, PickLegend, SplitControls, Unconverted, averageText, excludingNote, excludingText, groupTotals, shape,
-  usePicks, withAverage, without, type DateRange, type Metric,
+  transfersParam, transfersText, usePicks, withAverage, without, type DateRange, type Metric,
 } from './FlowReports';
 import { fmtMoney } from '../format';
 import type { AverageOver } from '../average';
@@ -24,7 +24,7 @@ const HINTS: Record<Pattern, string> = {
 
 const AGGREGATE_LABEL: Record<Aggregate, string> = { total: 'Totals', average: 'Average per occurrence' };
 
-export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange }) {
+export function TrendsTab({ fileId, range, transfers }: { fileId: string; range: DateRange; transfers: boolean }) {
   const { tz } = useParams();
   const [pattern, setPattern] = useState<Pattern>('monthOfYear');
   const [aggregate, setAggregate] = useState<Aggregate>('total');
@@ -33,7 +33,13 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
   const [over, setOver] = useState<AverageOver>('all');
   const [hover, setHover] = useState<string | null>(null);
   const spec = PATTERNS[pattern];
-  const r = useReport<TimeseriesData>(fileId, 'timeseries', { from: range.from, to: range.to, granularity: spec.granularity, groupBy });
+  const r = useReport<TimeseriesData>(fileId, 'timeseries', {
+    from: range.from,
+    to: range.to,
+    granularity: spec.granularity,
+    groupBy,
+    includeTransfers: transfersParam(transfers),
+  });
 
   // Legend figures are what each group moved over the range, whatever the bars aggregate.
   const groups = useMemo(() => (r.data ? groupTotals(r.data.data, metric) : []), [r.data, metric]);
@@ -79,6 +85,7 @@ export function TrendsTab({ fileId, range }: { fileId: string; range: DateRange 
             rangeText(range),
             AGGREGATE_LABEL[aggregate],
             groupBy === 'none' ? '' : `Split by ${groupBy} (${metric})`,
+            transfersText(transfers),
             excludingText(excluded),
             averageText(over, unit),
           ]}

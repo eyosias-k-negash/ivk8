@@ -4,7 +4,7 @@ import { config } from './config';
 import { DatasetCache } from './datasets';
 import { applyOverrides, type RateTable } from './engine/currency';
 import { IngestError, ingest, type Dataset } from './engine/loader';
-import { BadRequest, parseCommon, parseInstant, parseLocalInstant, parseRange } from './params';
+import { BadRequest, parseCommon, parseIncludeTransfers, parseInstant, parseLocalInstant, parseRange } from './params';
 import { RateService } from './rates/rateService';
 import { budgetTimeseriesReport, budgetsList } from './reports/budgets';
 import { plannedReport } from './reports/planned';
@@ -155,7 +155,7 @@ export function buildApp(deps: AppDeps = {}): FastifyInstance {
   app.get<Q>('/datasets/:key/summary', (req, reply) =>
     withDataset(req.params.key, req.query, reply, (ds, r, q) => {
       const { from, to } = range(ds, q);
-      return summaryReport(ds, from, to, r);
+      return summaryReport(ds, from, to, r, parseIncludeTransfers(q.includeTransfers));
     }),
   );
 
@@ -166,7 +166,7 @@ export function buildApp(deps: AppDeps = {}): FastifyInstance {
       const groupBy = parseGroupBy(q.groupBy);
       if (!groupBy) throw new BadRequest('groupBy must be none, category or account');
       const { from, to } = range(ds, q);
-      return timeseriesReport(ds, from, to, granularity, groupBy, q.tz as string, r);
+      return timeseriesReport(ds, from, to, granularity, groupBy, q.tz as string, r, parseIncludeTransfers(q.includeTransfers));
     }),
   );
 
@@ -215,7 +215,7 @@ export function buildApp(deps: AppDeps = {}): FastifyInstance {
       const granularity = parseGranularity(q.granularity);
       if (!granularity) throw new BadRequest('granularity must be DAY, WEEK, MONTH or YEAR');
       const { from, to } = range(ds, q);
-      return tagsReport(ds, from, to, granularity, q.tz as string, r);
+      return tagsReport(ds, from, to, granularity, q.tz as string, r, parseIncludeTransfers(q.includeTransfers));
     }),
   );
 
@@ -227,8 +227,9 @@ export function buildApp(deps: AppDeps = {}): FastifyInstance {
       const groupBy = parseGroupBy(q.groupBy);
       if (!groupBy) throw new BadRequest('groupBy must be none, category or account');
       const filters = parseCustomFilters(q);
+      const transfers = parseIncludeTransfers(q.includeTransfers);
       const { from, to } = range(ds, q);
-      return customReport(ds, from, to, granularity, groupBy, filters, q.tz as string, r);
+      return customReport(ds, from, to, granularity, groupBy, filters, q.tz as string, r, transfers);
     }),
   );
 

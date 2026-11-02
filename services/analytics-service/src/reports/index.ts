@@ -53,24 +53,58 @@ export interface MoneyFlow {
  * Money into or out of net worth, as every income and expense view counts it: income and expense on accounts
  * included in the balance, and transfers to or from an excluded account (out when money leaves an included account,
  * in when it arrives). Null for everything else: income and expense on an excluded account, and transfers between
- * two included accounts, whatever their currencies.
+ * two included accounts, whatever their currencies (views that offer to count those use `moneyFlows`).
  */
 export function moneyFlow(ds: Dataset, t: Transaction, rates: RateTable, unconverted: Set<string>): MoneyFlow | null {
-  let direction: MoneyFlow['direction'];
-  let accountId: string;
-  let native: number;
   if (t.type === 'TRANSFER') {
     const fromIn = inBalance(ds, t.accountId);
     if (fromIn === inBalance(ds, t.toAccountId)) return null;
-    [direction, accountId, native] = fromIn ? ['out', t.accountId, t.amount] : ['in', t.toAccountId!, t.toAmount ?? t.amount];
-  } else {
-    if (!inBalance(ds, t.accountId)) return null;
-    [direction, accountId, native] = [t.type === 'INCOME' ? 'in' : 'out', t.accountId, t.amount];
+    return fromIn
+      ? flowOn(ds, 'out', t.accountId, t.amount, rates, unconverted)
+      : flowOn(ds, 'in', t.toAccountId!, t.toAmount ?? t.amount, rates, unconverted);
   }
+  if (!inBalance(ds, t.accountId)) return null;
+  return flowOn(ds, t.type === 'INCOME' ? 'in' : 'out', t.accountId, t.amount, rates, unconverted);
+}
+
+function flowOn(
+  ds: Dataset,
+  direction: MoneyFlow['direction'],
+  accountId: string,
+  native: number,
+  rates: RateTable,
+  unconverted: Set<string>,
+): MoneyFlow {
   const currency = accountCurrency(ds, accountId);
   const base = toBase(native, currency, ds.baseCurrency, rates);
   if (base == null) unconverted.add(currency);
   return { direction, accountId, currency, native, base };
+}
+
+/** A money flow and what a breakdown by category files it under. */
+export interface FiledFlow extends MoneyFlow {
+  flow: { id: string; name: string };
+}
+
+/**
+ * Every flow a transaction makes, filed by category: the one `moneyFlow` counts, under `flowOf`. With `transfers`
+ * on, a transfer between two included accounts counts too, as two flows: expense on the account it leaves, filed
+ * under "<account> OUT" (id "transfer-out:<account id>"), and income on the one it reaches, under "<account> IN"
+ * ("transfer-in:<account id>"). Its own category is not used, so a transfer never inflates a real category on both
+ * sides. Off, such a transfer makes no flow, as everywhere else.
+ */
+export function moneyFlows(ds: Dataset, t: Transaction, rates: RateTable, unconverted: Set<string>, transfers: boolean): FiledFlow[] {
+  const m = moneyFlow(ds, t, rates, unconverted);
+  if (m) return [{ ...m, flow: flowOf(ds, t) }];
+  if (!transfers || t.type !== 'TRANSFER' || !inBalance(ds, t.accountId) || !inBalance(ds, t.toAccountId)) return [];
+  const name = (id: string) => ds.accounts.get(id)?.name ?? '(unknown account)';
+  return [
+    { ...flowOn(ds, 'out', t.accountId, t.amount, rates, unconverted), flow: { id: `transfer-out:${t.accountId}`, name: `${name(t.accountId)} OUT` } },
+    {
+      ...flowOn(ds, 'in', t.toAccountId!, t.toAmount ?? t.amount, rates, unconverted),
+      flow: { id: `transfer-in:${t.toAccountId}`, name: `${name(t.toAccountId!)} IN` },
+    },
+  ];
 }
 
 /**

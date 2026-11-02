@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { CursorValue } from './CursorValue';
 import type { Granularity, GroupBy, SummaryData, TimeseriesData } from '@ivy/contracts';
@@ -114,7 +114,8 @@ export function RelativeRange({ mode, onPick }: { mode: 'last' | 'next'; onPick:
   );
 }
 
-export function RangePicker({ value, onChange }: { value: DateRange; onChange: (r: DateRange) => void }) {
+/** The range row; `children` (options shared by the tabs below it) follow the range inputs. */
+export function RangePicker({ value, onChange, children }: { value: DateRange; onChange: (r: DateRange) => void; children?: ReactNode }) {
   const { tz } = useParams();
   return (
     <div className="controls">
@@ -131,9 +132,38 @@ export function RangePicker({ value, onChange }: { value: DateRange; onChange: (
         </button>
       ))}
       <RelativeRange mode="last" onPick={onChange} />
+      {children}
     </div>
   );
 }
+
+// ---------- transfers between included accounts (off by default) ----------
+
+const TRANSFERS_LABEL = 'Include transfers between accounts';
+
+/**
+ * Whether a transfer between two accounts included in the balance counts: as expense out of the account it leaves,
+ * under "<account> OUT", and income into the one it reaches, under "<account> IN". One choice for every flow tab.
+ */
+export function TransfersToggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label title="Each transfer between accounts included in the balance counts as expense out of the account it leaves (“<account> OUT”) and income into the one it reaches (“<account> IN”).">
+      <input type="checkbox" checked={value} onChange={(e) => onChange(e.target.checked)} /> {TRANSFERS_LABEL}
+    </label>
+  );
+}
+
+/** The `includeTransfers` query param: absent when off, so those requests stay as they were. */
+export const transfersParam = (on: boolean) => (on ? 'true' : undefined);
+
+/** The print header line, empty for the default. */
+export const transfersText = (on: boolean) => (on ? 'Including transfers between accounts' : '');
+
+/** How a tab's footnote words transfers between included accounts. */
+export const betweenText = (on: boolean) =>
+  on
+    ? 'transfers between included accounts count on both sides: as expense out of the account they leave (“<account> OUT”) and income into the one they reach (“<account> IN”)'
+    : `transfers between included accounts count only with “${TRANSFERS_LABEL}” checked`;
 
 export function Unconverted({ list }: { list: string[] }) {
   if (!list.length) return null;
@@ -146,8 +176,8 @@ export function Unconverted({ list }: { list: string[] }) {
 
 // ---------- Income & expense (summary) ----------
 
-export function SummaryTab({ fileId, range }: { fileId: string; range: DateRange }) {
-  const r = useReport<SummaryData>(fileId, 'summary', { from: range.from, to: range.to });
+export function SummaryTab({ fileId, range, transfers }: { fileId: string; range: DateRange; transfers: boolean }) {
+  const r = useReport<SummaryData>(fileId, 'summary', { from: range.from, to: range.to, includeTransfers: transfersParam(transfers) });
   if (r.error) return <ErrorBox error={r.error} />;
   if (!r.data) return <p className="muted">Loading…</p>;
   const { data: s, baseCurrency: base } = r.data;
@@ -160,11 +190,10 @@ export function SummaryTab({ fileId, range }: { fileId: string; range: DateRange
         <Kpi label="Transactions" value={String(s.count)} />
       </div>
       <Unconverted list={s.unconverted} />
-      <IncomeExpenseChart fileId={fileId} range={range} />
+      <IncomeExpenseChart fileId={fileId} range={range} transfers={transfers} />
       <p className="muted">
         Executed only; planned payments are not counted. Income and expense on accounts excluded from the balance are left out. A
-        transfer to or from an excluded account counts as expense or income under its category; transfers between included accounts never
-        count.
+        transfer to or from an excluded account counts as expense or income under its category; {betweenText(transfers)}.
       </p>
 
       <details open>
@@ -213,10 +242,16 @@ export function SummaryTab({ fileId, range }: { fileId: string; range: DateRange
 }
 
 /** Income vs expense per interval, with a trailing average bar. No breakdowns; see Breakdowns for those. */
-function IncomeExpenseChart({ fileId, range }: { fileId: string; range: DateRange }) {
+function IncomeExpenseChart({ fileId, range, transfers }: { fileId: string; range: DateRange; transfers: boolean }) {
   const [granularity, setGranularity] = useState<Granularity>('MONTH');
   const [over, setOver] = useState<AverageOver>('all');
-  const r = useReport<TimeseriesData>(fileId, 'timeseries', { from: range.from, to: range.to, granularity, groupBy: 'none' });
+  const r = useReport<TimeseriesData>(fileId, 'timeseries', {
+    from: range.from,
+    to: range.to,
+    granularity,
+    groupBy: 'none',
+    includeTransfers: transfersParam(transfers),
+  });
   const view = useMemo(() => {
     if (!r.data) return null;
     const v = shape(r.data.data, 'expense', [], new Map(), true);
@@ -238,7 +273,11 @@ function IncomeExpenseChart({ fileId, range }: { fileId: string; range: DateRang
           </select>
         </label>
         <AverageControl value={over} onChange={setOver} unit={unit} />
-        <PrintButton tab="Income & expense" title="Income and expense" meta={[rangeText(range), `Per ${unit}`, averageText(over, unit)]} />
+        <PrintButton
+          tab="Income & expense"
+          title="Income and expense"
+          meta={[rangeText(range), `Per ${unit}`, transfersText(transfers), averageText(over, unit)]}
+        />
       </div>
       {r.error && <ErrorBox error={r.error} />}
       {!r.data && !r.error && <p className="muted">Loading…</p>}
@@ -412,13 +451,19 @@ export function usePicks(groups: Group[], groupBy: GroupBy) {
   };
 }
 
-export function BreakdownsTab({ fileId, range }: { fileId: string; range: DateRange }) {
+export function BreakdownsTab({ fileId, range, transfers }: { fileId: string; range: DateRange; transfers: boolean }) {
   const [granularity, setGranularity] = useState<Granularity>('MONTH');
   const [groupBy, setGroupBy] = useState<GroupBy>('none');
   const [metric, setMetric] = useState<Metric>('expense');
   const [over, setOver] = useState<AverageOver>('all');
   const [hover, setHover] = useState<string | null>(null);
-  const r = useReport<TimeseriesData>(fileId, 'timeseries', { from: range.from, to: range.to, granularity, groupBy });
+  const r = useReport<TimeseriesData>(fileId, 'timeseries', {
+    from: range.from,
+    to: range.to,
+    granularity,
+    groupBy,
+    includeTransfers: transfersParam(transfers),
+  });
 
   const groups = useMemo(() => (r.data ? groupTotals(r.data.data, metric) : []), [r.data, metric]);
   const { picks, excluded, included, showOther, toggle, toggleOther, reset } = usePicks(groups, groupBy);
@@ -452,6 +497,7 @@ export function BreakdownsTab({ fileId, range }: { fileId: string; range: DateRa
             rangeText(range),
             `Per ${unit}`,
             groupBy === 'none' ? '' : `Split by ${groupBy} (${metric})`,
+            transfersText(transfers),
             excludingText(excluded),
             averageText(over, unit),
           ]}

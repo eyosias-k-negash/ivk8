@@ -88,4 +88,20 @@ describe('tagsReport', () => {
     expect(o.unconverted).toEqual(['USD']);
     expect(o.tags[0]!.expense).toBe(500 + 120 + 30 + 80);
   });
+
+  it('counts a transfer between included accounts on both sides when asked for', () => {
+    const o = tagsReport(ds, range.from, range.to, 'MONTH', '+03:00', rates, true);
+    // out of Cash: 999; into USD Wallet: 9 USD = 900
+    expect(o.tags[0]).toEqual({ id: TRIP, name: 'Trip', income: 50 + 900, expense: 500 + 200 + 120 + 30 + 80 + 999 });
+    expect(o.buckets[1]).toEqual({
+      bucket: '2026-10',
+      income: [{ tagIds: [TRIP], amount: 900, count: 1 }],
+      expense: [
+        { tagIds: [TRIP], amount: 80 + 999, count: 2 },
+        { tagIds: [TRIP, WORK], amount: 30, count: 1 },
+      ],
+    });
+    // the side with no rate is left out; the other still counts
+    expect(tagsReport(ds, range.from, range.to, 'MONTH', '+03:00', none, true).tags[0]).toMatchObject({ income: 50, expense: 500 + 120 + 30 + 80 + 999 });
+  });
 });

@@ -5,10 +5,11 @@
  * - Only EXECUTED transactions count (planned never do; see rules.ts).
  * - Money into or out of net worth counts (see `moneyFlow`): income and expense on accounts included in the balance,
  *   and transfers to or from an excluded account, as income when money arrives in an included account and expense
- *   when it leaves one. Income and expense on an excluded account, and transfers between two included accounts
- *   (whatever their currencies), never count.
- * - By category, a transfer is filed under its category, or under its two accounts when it has none. By account,
- *   every flow is filed under its included side.
+ *   when it leaves one. Income and expense on an excluded account never count; nor do transfers between two included
+ *   accounts (whatever their currencies) unless `transfers` asks for them (see `moneyFlows`).
+ * - By category, a transfer is filed under its category, or under its two accounts when it has none; a transfer
+ *   between included accounts under "<account> OUT" and "<account> IN". By account, every flow is filed under its
+ *   included side.
  * - Loan-linked transactions are normal transactions.
  * - Range is [from, to) on dateTime; bucketing follows the request timezone.
  * - Amounts are converted to base at the current rate. A currency with no rate is left out of
@@ -20,7 +21,7 @@ import type { Dataset } from '../engine/loader';
 import { classify } from '../engine/rules';
 import { bucketKey, parseTzOffsetMs } from '../engine/time';
 import type { Transaction } from '../engine/types';
-import { flowOf, moneyFlow } from './index';
+import { moneyFlows } from './index';
 
 const DAY_MS = 86_400_000;
 /** Guard against absurd ranges (e.g. DAY buckets over centuries). */
@@ -36,18 +37,24 @@ interface Flow {
   currency: string;
   native: number;
   base: number | null;
+  /** What the category breakdown files it under. */
+  category: { id: string; name: string };
 }
 
-/** Executed money into or out of net worth in [from, to), with base amounts resolved once. */
-function flows(ds: Dataset, from: number, to: number, rates: RateTable, unconverted: Set<string>): Flow[] {
+/**
+ * Executed money into or out of net worth in [from, to), with base amounts resolved once. A transfer between included
+ * accounts counted with `transfers` makes two flows.
+ */
+function flows(ds: Dataset, from: number, to: number, rates: RateTable, unconverted: Set<string>, transfers: boolean): Flow[] {
   const out: Flow[] = [];
   for (const t of ds.transactions) {
     if (classify(t, ds.rules) !== 'EXECUTED') continue;
     const at = t.dateTime as number;
     if (at < from || at >= to) continue;
-    const m = moneyFlow(ds, t, rates, unconverted);
-    if (!m) continue;
-    out.push({ t, type: m.direction === 'in' ? 'INCOME' : 'EXPENSE', accountId: m.accountId, currency: m.currency, native: m.native, base: m.base });
+    for (const m of moneyFlows(ds, t, rates, unconverted, transfers)) {
+      const type = m.direction === 'in' ? 'INCOME' : 'EXPENSE';
+      out.push({ t, type, accountId: m.accountId, currency: m.currency, native: m.native, base: m.base, category: m.flow });
+    }
   }
   return out;
 }
@@ -69,9 +76,9 @@ export function earliestExecuted(ds: Dataset): number | undefined {
   return min;
 }
 
-export function summaryReport(ds: Dataset, from: number, to: number, rates: RateTable): SummaryData {
+export function summaryReport(ds: Dataset, from: number, to: number, rates: RateTable, transfers = false): SummaryData {
   const unconverted = new Set<string>();
-  const rows = flows(ds, from, to, rates, unconverted);
+  const rows = flows(ds, from, to, rates, unconverted, transfers);
 
   let income = 0;
   let expense = 0;
@@ -79,7 +86,7 @@ export function summaryReport(ds: Dataset, from: number, to: number, rates: Rate
   const byAcc = new Map<string, SummaryData['byAccount'][number]>();
 
   for (const f of rows) {
-    const c = flowOf(ds, f.t);
+    const c = f.category;
     const a = account(ds, f);
     const cat = byCat.get(c.id) ?? { id: c.id, name: c.name, income: 0, expense: 0, net: 0 };
     const acc =
@@ -123,7 +130,7 @@ export function summaryReport(ds: Dataset, from: number, to: number, rates: Rate
     byAccount: [...byAcc.values()]
       .map((r) => ({ ...finish(r), incomeNative: round(r.incomeNative), expenseNative: round(r.expenseNative) }))
       .sort(bySize),
-    count: rows.length,
+    count: new Set(rows.map((f) => f.t.id)).size,
     unconverted: [...unconverted].sort(),
   };
 }
@@ -153,6 +160,7 @@ export function timeseriesReport(
   groupBy: GroupBy,
   tz: string,
   rates: RateTable,
+  transfers = false,
 ): TimeseriesData {
   const unconverted = new Set<string>();
   const keys = bucketKeys(from, to, granularity, tz);
@@ -160,10 +168,10 @@ export function timeseriesReport(
 
   if (groupBy === 'none') for (const k of keys) points.set(k, { bucket: k, income: 0, expense: 0 });
 
-  for (const f of flows(ds, from, to, rates, unconverted)) {
+  for (const f of flows(ds, from, to, rates, unconverted, transfers)) {
     if (f.base == null) continue;
     const bucket = bucketKey(f.t.dateTime as number, granularity, tz);
-    const g = groupBy === 'category' ? flowOf(ds, f.t) : groupBy === 'account' ? account(ds, f) : null;
+    const g = groupBy === 'category' ? f.category : groupBy === 'account' ? account(ds, f) : null;
     const id = g ? `${bucket}\0${g.id}` : bucket;
     const p = points.get(id) ?? { bucket, ...(g ? { groupId: g.id, groupName: g.name } : {}), income: 0, expense: 0 };
     if (f.type === 'INCOME') p.income += f.base;

@@ -44,6 +44,17 @@ export interface AnalyticsParams {
   rateOverrides?: string;
 }
 
+/**
+ * Accepted by /summary, /timeseries, /tags and /custom-report. Off by default: a transfer between two accounts included
+ * in the balance moves no money in or out, so it never counts. With "true", each such transfer counts as two flows:
+ * expense on the account it leaves, filed by category under "<account> OUT" (flow id "transfer-out:<account id>"), and
+ * income on the one it reaches, under "<account> IN" ("transfer-in:<account id>"). Transfers to or from an excluded
+ * account count either way, under their own category.
+ */
+export interface TransferParams {
+  includeTransfers?: 'true' | 'false';
+}
+
 export type Granularity = 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
 export type GroupBy = 'none' | 'category' | 'account';
 
@@ -151,7 +162,8 @@ export interface SummaryData {
   byAccount: (BreakdownRow & { currency: string; incomeNative: number; expenseNative: number })[];
   /**
    * Transactions counted in the range: executed income and expense on accounts included in the balance, and transfers
-   * to or from an excluded account. Transfers between included accounts never count.
+   * to or from an excluded account. Transfers between included accounts count only with `includeTransfers`, once each
+   * (see TransferParams).
    */
   count: number;
   /** Currencies whose amounts are left out of base totals because no rate was available. */
@@ -161,8 +173,9 @@ export interface SummaryData {
 export interface TimeseriesPoint {
   bucket: string;
   /**
-   * Present when groupBy != none. By category: a category id, "uncategorized", or "transfer:<from>><to>" for an
-   * uncategorized transfer to or from an excluded account. By account: the account included in the balance.
+   * Present when groupBy != none. By category: a category id, "uncategorized", "transfer:<from>><to>" for an
+   * uncategorized transfer to or from an excluded account, or with `includeTransfers` "transfer-out:<account>" and
+   * "transfer-in:<account>" (see TransferParams). By account: the account included in the balance.
    */
   groupId?: string;
   groupName?: string;
@@ -337,7 +350,10 @@ export interface TagsData {
 export interface CustomReportParams {
   /** Comma-separated account ids: the side included in the balance is one of them (see SummaryData.byAccount). */
   accounts?: string;
-  /** Comma-separated flow ids, as in the category breakdown: category ids, "uncategorized", or "transfer:<from>><to>". */
+  /**
+   * Comma-separated flow ids, as in the category breakdown: category ids, "uncategorized", "transfer:<from>><to>", or
+   * with `includeTransfers` "transfer-out:<account>" and "transfer-in:<account>".
+   */
   categories?: string;
   /** JSON CustomReportRuleGroup. */
   rules?: string;
@@ -395,7 +411,7 @@ export interface CustomReportData {
     accounts: (CustomReportOption & { currency: string })[];
     /**
      * Live categories, then "Uncategorized", then every other flow id money has ever been filed under: uncategorized
-     * transfer pairs, and categories since deleted.
+     * transfer pairs, categories since deleted, and with `includeTransfers` each account's OUT and IN.
      */
     categories: CustomReportOption[];
     /** Live tags. */

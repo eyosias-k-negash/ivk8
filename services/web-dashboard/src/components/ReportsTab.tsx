@@ -6,7 +6,8 @@ import { CursorValue } from './CursorValue';
 import { PrintButton, rangeText } from '../print';
 import { ErrorBox } from './ErrorBox';
 import {
-  AverageControl, Kpi, SERIES, Unconverted, averageText, fade, highlighted, hoverList, hoverRow, periodsText, type DateRange,
+  AverageControl, Kpi, SERIES, Unconverted, averageText, betweenText, fade, highlighted, hoverList, hoverRow, periodsText, transfersParam,
+  transfersText, type DateRange,
 } from './FlowReports';
 import { TransactionsTable } from './TransactionsTable';
 import { fmtMoney, fmtPct } from '../format';
@@ -65,9 +66,10 @@ function SettledInput({ value, onSettle, ...rest }: { value: string; onSettle: (
 }
 
 /** The configurable report: income above zero and expense below for the transactions passing the filters. */
-export function ReportsTab({ fileId, range, config, onChange }: {
+export function ReportsTab({ fileId, range, transfers, config, onChange }: {
   fileId: string;
   range: DateRange;
+  transfers: boolean;
   config: ReportConfig;
   /** Takes updater functions too: typed text lands a moment after typing, and must not undo a click made meanwhile. */
   onChange: Update;
@@ -78,7 +80,7 @@ export function ReportsTab({ fileId, range, config, onChange }: {
   const r = useReport<CustomReportData>(
     fileId,
     'custom-report',
-    { from: range.from, to: range.to, ...('params' in query ? query.params : {}) },
+    { from: range.from, to: range.to, includeTransfers: transfersParam(transfers), ...('params' in query ? query.params : {}) },
     !problem,
   );
   // The filter lists come with each answer; keep the last ones while a config that can't run is being fixed.
@@ -153,7 +155,13 @@ export function ReportsTab({ fileId, range, config, onChange }: {
         <PrintButton
           tab="Reports"
           title="Custom report"
-          meta={[rangeText(range), `Per ${unit}`, split === 'none' ? '' : `Split by ${split}`, averageText(config.average, unit)]}
+          meta={[
+            rangeText(range),
+            `Per ${unit}`,
+            split === 'none' ? '' : `Split by ${split}`,
+            transfersText(transfers),
+            averageText(config.average, unit),
+          ]}
         />
       </div>
       <ReportFilters config={config} options={options.current} base={base} onChange={onChange} />
@@ -210,8 +218,8 @@ export function ReportsTab({ fileId, range, config, onChange }: {
       <p className="muted" style={{ fontSize: 12 }}>
         Executed only; planned payments are not counted. As in every tab, income and expense on accounts excluded from the balance are
         left out, a transfer to or from one counts as income or expense on the included account, under its category (or its two accounts
-        if it has none), and transfers between included accounts never count. A transaction counts when its included side is one of the
-        accounts, its category one of the categories, and it meets the conditions. Words match its title or description in any case;
+        if it has none), and {betweenText(transfers)}. A transaction counts when its included side is one of the accounts, its category
+        one of the categories, and it meets the conditions{transfers && '; each side of a transfer between included accounts is tested on its own'}. Words match its title or description in any case;
         amounts are each transaction’s own, in {base || 'base currency'}, bounds included. A condition still being filled in is left out.
       </p>
     </>

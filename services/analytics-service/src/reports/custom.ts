@@ -3,10 +3,12 @@
  * filters, optionally split by category or account.
  *
  * Rules applied here:
- * - Money counts exactly as in every income and expense view (see `moneyFlow`, `flowOf`): executed only; income and
- *   expense on accounts included in the balance, and transfers to or from an excluded account, filed under the
- *   included side and under their category (or their two accounts when they have none). Income and expense on an
- *   excluded account, and transfers between two included accounts, never count, whatever the filters.
+ * - Money counts exactly as in every income and expense view (see `moneyFlows`): executed only; income and expense on
+ *   accounts included in the balance, and transfers to or from an excluded account, filed under the included side and
+ *   under their category (or their two accounts when they have none). Income and expense on an excluded account never
+ *   count, whatever the filters. Nor do transfers between two included accounts, unless `transfers` asks for them:
+ *   then each is two flows, filtered one by one (out of "<account> OUT", into "<account> IN"), and counts once as a
+ *   transaction when either passes.
  * - Scope: the included side is one of `accounts`, and the flow id the category breakdown files it under is one of
  *   `categories`. Unknown ids match nothing rather than failing, so a filter made against another backup still runs.
  * - Rules: a tree of conditions on tags, words in the title or description (any case) and the base amount (to the
@@ -25,7 +27,7 @@ import { classify } from '../engine/rules';
 import { bucketKey } from '../engine/time';
 import type { Transaction } from '../engine/types';
 import { BadRequest } from '../params';
-import { flowOf, moneyFlow } from './index';
+import { moneyFlows } from './index';
 import { bucketKeys } from './flows';
 
 /** Conditions plus groups, root included; keeps a request from asking for unbounded work. */
@@ -173,9 +175,10 @@ export function customReport(
   filters: CustomFilters,
   tz: string,
   rates: RateTable,
+  transfers = false,
 ): CustomReportData {
   const unconverted = new Set<string>();
-  const ignored = new Set<string>(); // moneyFlow's own list; only matching transactions are reported
+  const ignored = new Set<string>(); // moneyFlows' own list; only matching transactions are reported
   // Flow ids money has been filed under that are not live categories (uncategorized transfer pairs, deleted
   // categories), from the whole history, so the category options don't change with the range.
   const otherFlows = new Map<string, string>();
@@ -189,38 +192,41 @@ export function customReport(
 
   for (const t of ds.transactions) {
     if (classify(t, ds.rules) !== 'EXECUTED') continue;
-    const money = moneyFlow(ds, t, rates, ignored);
-    if (!money) continue;
-    const flow = flowOf(ds, t);
-    if (!ds.categories.has(flow.id) && flow.id !== 'uncategorized') otherFlows.set(flow.id, flow.name);
-
     const at = t.dateTime as number;
-    if (at < from || at >= to) continue;
-    if (!inScope(money.accountId, flow.id, filters)) continue;
-    const verdict = filters.rules ? test(filters.rules, subject(ds, t, money.base == null ? null : round(Math.abs(money.base)))) : true;
-    if (verdict === false) continue;
-    if (money.base == null) {
-      unconverted.add(money.currency);
-      continue;
-    }
+    const inRange = at >= from && at < to;
+    let counted = false;
+    for (const money of moneyFlows(ds, t, rates, ignored, transfers)) {
+      const { flow } = money;
+      if (!ds.categories.has(flow.id) && flow.id !== 'uncategorized') otherFlows.set(flow.id, flow.name);
 
-    const side = money.direction === 'in' ? 'income' : 'expense';
-    const b = buckets.get(bucketKey(at, granularity, tz))!;
-    b[side] += money.base;
-    b.count++;
-    if (groupBy !== 'none') {
-      const g =
-        groupBy === 'category'
-          ? flow
-          : { id: money.accountId, name: ds.accounts.get(money.accountId)?.name ?? '(unknown account)' };
-      const by = side === 'income' ? b.incomeBy : b.expenseBy;
-      by[g.id] = (by[g.id] ?? 0) + money.base;
-      const group = groups.get(g.id) ?? { id: g.id, name: g.name, income: 0, expense: 0 };
-      group[side] += money.base;
-      groups.set(g.id, group);
+      if (!inRange || !inScope(money.accountId, flow.id, filters)) continue;
+      const verdict = filters.rules ? test(filters.rules, subject(ds, t, money.base == null ? null : round(Math.abs(money.base)))) : true;
+      if (verdict === false) continue;
+      if (money.base == null) {
+        unconverted.add(money.currency);
+        continue;
+      }
+
+      const side = money.direction === 'in' ? 'income' : 'expense';
+      const b = buckets.get(bucketKey(at, granularity, tz))!;
+      b[side] += money.base;
+      if (groupBy !== 'none') {
+        const g =
+          groupBy === 'category'
+            ? flow
+            : { id: money.accountId, name: ds.accounts.get(money.accountId)?.name ?? '(unknown account)' };
+        const by = side === 'income' ? b.incomeBy : b.expenseBy;
+        by[g.id] = (by[g.id] ?? 0) + money.base;
+        const group = groups.get(g.id) ?? { id: g.id, name: g.name, income: 0, expense: 0 };
+        group[side] += money.base;
+        groups.set(g.id, group);
+      }
+      if (side === 'income') income += money.base;
+      else expense += money.base;
+      counted = true;
     }
-    if (side === 'income') income += money.base;
-    else expense += money.base;
+    if (!counted) continue;
+    buckets.get(bucketKey(at, granularity, tz))!.count++;
     transactionIds.push(t.id);
   }
 

@@ -86,6 +86,18 @@ describe('summary + timeseries routes', () => {
     expect((await a.inject(`/datasets/${key}/timeseries?groupBy=tag`)).statusCode).toBe(400);
     expect((await a.inject(`/datasets/${key}/summary?from=2026-09-10&to=2026-09-01`)).statusCode).toBe(400);
   });
+
+  it('count transfers between included accounts only when asked to', async () => {
+    const a = app();
+    const move = tx({ accountId: ID.cash, type: 'TRANSFER', amount: 300, toAccountId: ID.usd, toAmount: 2, dateTime: utc('2026-09-02T10:00:00Z') });
+    await a.inject({ method: 'PUT', url: `/datasets/${key}`, payload: makeBackup({ transactions: [...backup.transactions, move] }) });
+    const url = `/datasets/${key}/summary?from=2026-09-01&to=2026-09-30`;
+    expect((await a.inject(url)).json().data).toMatchObject({ income: 1000, expense: 0, count: 2 });
+    expect((await a.inject(`${url}&includeTransfers=false`)).json().data).toMatchObject({ income: 1000, expense: 0 });
+    expect((await a.inject(`${url}&includeTransfers=true`)).json().data).toMatchObject({ income: 1000, expense: 300, count: 3 });
+    for (const report of ['summary', 'timeseries', 'tags', 'custom-report'])
+      expect((await a.inject(`/datasets/${key}/${report}?includeTransfers=yes`)).statusCode).toBe(400);
+  });
 });
 
 describe('projection route', () => {

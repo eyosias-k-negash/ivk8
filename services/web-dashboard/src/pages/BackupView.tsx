@@ -15,10 +15,13 @@ import { TagsTab } from '../components/TagsTab';
 import { ReportsTab } from '../components/ReportsTab';
 import { TrendsTab } from '../components/TrendsTab';
 import { DEFAULT_CONFIG, type ReportConfig } from '../reports';
-import { Kpi, RangePicker, SummaryTab, BreakdownsTab, presetRange, type DateRange } from '../components/FlowReports';
+import { Kpi, RangePicker, SummaryTab, BreakdownsTab, TransfersToggle, presetRange, type DateRange } from '../components/FlowReports';
 
 const TABS = ['Transactions', 'Balances', 'Income & expense', 'Breakdowns', 'Trends', 'Budgets', 'Projected', 'Tags', 'Reports', 'Payees', 'Rates & timezone'] as const;
 type Tab = (typeof TABS)[number];
+const RANGE_TABS: readonly Tab[] = ['Income & expense', 'Breakdowns', 'Trends', 'Budgets', 'Tags', 'Reports'];
+/** Tabs that can count transfers between included accounts; Budgets measures spending against a limit, so it never does. */
+const TRANSFER_TABS: readonly Tab[] = ['Income & expense', 'Breakdowns', 'Trends', 'Tags', 'Reports'];
 
 /** Flows 3–7 for one opened backup. */
 export function BackupView({ fileId, onBack }: { fileId: string; onBack: () => void }) {
@@ -27,6 +30,8 @@ export function BackupView({ fileId, onBack }: { fileId: string; onBack: () => v
   const [range, setRange] = useState<DateRange>(() => presetRange('thisMonth', tz));
   // Kept here so a configured report survives visits to other tabs.
   const [report, setReport] = useState<ReportConfig>(DEFAULT_CONFIG);
+  // Off by default, and one choice for every tab that offers it, like the range.
+  const [transfers, setTransfers] = useState(false);
   const rates = useReport<null>(fileId, 'rates'); // also warms the dataset in analytics
 
   return (
@@ -42,16 +47,18 @@ export function BackupView({ fileId, onBack }: { fileId: string; onBack: () => v
       </nav>
       {tab === 'Transactions' && <TransactionsTab fileId={fileId} />}
       {tab === 'Balances' && <BalancesTab fileId={fileId} />}
-      {(tab === 'Income & expense' || tab === 'Breakdowns' || tab === 'Trends' || tab === 'Budgets' || tab === 'Tags' || tab === 'Reports') && (
-        <RangePicker value={range} onChange={setRange} />
+      {RANGE_TABS.includes(tab) && (
+        <RangePicker value={range} onChange={setRange}>
+          {TRANSFER_TABS.includes(tab) && <TransfersToggle value={transfers} onChange={setTransfers} />}
+        </RangePicker>
       )}
-      {tab === 'Income & expense' && <SummaryTab fileId={fileId} range={range} />}
-      {tab === 'Breakdowns' && <BreakdownsTab fileId={fileId} range={range} />}
-      {tab === 'Trends' && <TrendsTab fileId={fileId} range={range} />}
+      {tab === 'Income & expense' && <SummaryTab fileId={fileId} range={range} transfers={transfers} />}
+      {tab === 'Breakdowns' && <BreakdownsTab fileId={fileId} range={range} transfers={transfers} />}
+      {tab === 'Trends' && <TrendsTab fileId={fileId} range={range} transfers={transfers} />}
       {tab === 'Budgets' && <BudgetsTab fileId={fileId} range={range} />}
       {tab === 'Projected' && <ProjectedTab fileId={fileId} />}
-      {tab === 'Tags' && <TagsTab fileId={fileId} range={range} />}
-      {tab === 'Reports' && <ReportsTab fileId={fileId} range={range} config={report} onChange={setReport} />}
+      {tab === 'Tags' && <TagsTab fileId={fileId} range={range} transfers={transfers} />}
+      {tab === 'Reports' && <ReportsTab fileId={fileId} range={range} transfers={transfers} config={report} onChange={setReport} />}
       {tab === 'Payees' && <Pending fileId={fileId} report="payees" />}
       {tab === 'Rates & timezone' && rates.data && <SettingsTab base={rates.data.baseCurrency} rates={rates.data.ratesUsed} />}
     </section>

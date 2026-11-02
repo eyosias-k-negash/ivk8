@@ -204,6 +204,49 @@ describe('customReport', () => {
   });
 });
 
+describe('customReport with transfers between included accounts', () => {
+  const OUT = `transfer-out:${ID.cash}`;
+  const IN = `transfer-in:${ID.usd}`;
+  const runT = (filters: CustomFilters = {}, groupBy: 'none' | 'category' | 'account' = 'none', r: RateTable = rates) =>
+    customReport(ds, range.from, range.to, 'MONTH', groupBy, filters, '+03:00', r, true);
+
+  it('counts each as two flows but one transaction', () => {
+    const o = runT();
+    const s = summaryReport(ds, range.from, range.to, rates, true);
+    // between: 999 out of Cash, 9 USD = 900 into USD Wallet
+    expect(totals(o)).toEqual({ income: 1150 + 900, expense: 1020 + 999, count: 8 });
+    expect(totals(o)).toEqual({ income: s.income, expense: s.expense, count: s.count });
+    expect(o.transactionIds.filter((id) => id === between.id)).toHaveLength(1);
+    expect(o.buckets[1]).toMatchObject({ bucket: '2026-10', income: 150 + 900, expense: 470 + 999, count: 4 });
+  });
+
+  it('files the two flows under "<account> OUT" and "<account> IN", and offers them as categories', () => {
+    const o = runT({}, 'category');
+    expect(o.groups.filter((g) => g.id === OUT || g.id === IN)).toEqual([
+      { id: OUT, name: 'Cash OUT', income: 0, expense: 999 },
+      { id: IN, name: 'USD Wallet IN', income: 900, expense: 0 },
+    ]);
+    expect(o.options.categories.slice(3)).toEqual([
+      { id: OUT, name: 'Cash OUT' },
+      { id: TO_HIDDEN, name: 'Transfer Cash → Hidden' },
+      { id: IN, name: 'USD Wallet IN' },
+    ]);
+  });
+
+  it('filters each flow on its own', () => {
+    expect(totals(runT(filters({ categories: OUT })))).toEqual({ income: 0, expense: 999, count: 1 });
+    expect(totals(runT(filters({ accounts: ID.usd })))).toEqual({ income: 900, expense: 300, count: 2 });
+    // 999 is outside the bound, 900 inside: the transaction still matches, through its IN side
+    const o = runT(where(all(text('contains', 'coffee fund'), amount(undefined, 950))));
+    expect([totals(o), o.transactionIds]).toEqual([{ income: 900, expense: 0, count: 1 }, [between.id]]);
+  });
+
+  it('keeps the side with a rate when the other has none', () => {
+    const o = runT(filters({ categories: `${OUT},${IN}` }), 'none', none);
+    expect([totals(o), o.unconverted]).toEqual([{ income: 0, expense: 999, count: 1 }, ['USD']]);
+  });
+});
+
 describe('parseCustomFilters', () => {
   it('treats absent and blank filters as no filter', () => {
     expect(filters({ accounts: '', categories: ' , ', rules: '' })).toEqual({});
